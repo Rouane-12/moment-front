@@ -1,0 +1,326 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * MOMENT design system — dark, contemporary West African.
+ * Noir / Ivoire / Terracotta. All colors in oklch, all values are tokens.
+ */
+
+@theme inline {
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 3px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 6px);
+  --radius-2xl: calc(var(--radius) + 14px);
+  --radius-3xl: calc(var(--radius) + 24px);
+  --radius-4xl: calc(var(--radius) + 40px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-clay: var(--clay);
+  --color-leaf: var(--leaf);
+  --color-gold: var(--gold);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --shadow-glow: 0 0 60px -10px oklch(0.62 0.17 42 / 0.55);
+  --shadow-lift: 0 30px 80px -40px oklch(0 0 0 / 0.9);
+}
+
+:root {
+  --radius: 1rem;
+
+  --background: oklch(0.13 0.004 60);
+  --foreground: oklch(0.95 0.016 85);
+  --surface: oklch(0.17 0.006 60);
+  --surface-2: oklch(0.21 0.008 60);
+
+  --card: oklch(0.17 0.006 60);
+  --card-foreground: oklch(0.95 0.016 85);
+  --popover: oklch(0.17 0.006 60);
+  --popover-foreground: oklch(0.95 0.016 85);
+
+  --primary: oklch(0.64 0.17 44);
+  --primary-foreground: oklch(0.14 0.01 60);
+
+  --secondary: oklch(0.24 0.01 60);
+  --secondary-foreground: oklch(0.95 0.016 85);
+
+  --muted: oklch(0.22 0.008 60);
+  --muted-foreground: oklch(0.68 0.014 75);
+
+  --accent: oklch(0.26 0.03 45);
+  --accent-foreground: oklch(0.95 0.016 85);
+
+  --clay: oklch(0.53 0.13 33);
+  --leaf: oklch(0.5 0.09 155);
+  --gold: oklch(0.8 0.12 85);
+
+  --destructive: oklch(0.58 0.2 25);
+  --destructive-foreground: oklch(0.96 0.01 85);
+
+  --border: oklch(0.95 0.016 85 / 0.12);
+  --input: oklch(0.95 0.016 85 / 0.16);
+  --ring: oklch(0.64 0.17 44 / 0.6);
+
+  --sidebar: oklch(0.15 0.005 60);
+  --sidebar-foreground: oklch(0.95 0.016 85);
+  --sidebar-primary: oklch(0.64 0.17 44);
+  --sidebar-primary-foreground: oklch(0.14 0.01 60);
+  --sidebar-accent: oklch(0.22 0.008 60);
+  --sidebar-accent-foreground: oklch(0.95 0.016 85);
+  --sidebar-border: oklch(0.95 0.016 85 / 0.1);
+  --sidebar-ring: oklch(0.64 0.17 44 / 0.5);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.03em;
+  }
+
+  ::selection {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+  }
+}
+
+/* ---------- Utilities ---------- */
+
+@utility text-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.035em;
+  line-height: 0.92;
+}
+
+@utility label-mono {
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+}
+
+@utility surface-panel {
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--color-surface) 92%, transparent),
+    var(--color-background)
+  );
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+}
+
+@utility glass-panel {
+  background: color-mix(in oklab, var(--color-surface) 65%, transparent);
+  backdrop-filter: blur(18px) saturate(1.2);
+  border: 1px solid var(--color-border);
+}
+
+@utility grain {
+  position: relative;
+}
+@utility grain-overlay {
+  background-image: radial-gradient(
+    oklch(0.95 0.016 85 / 0.5) 0.5px,
+    transparent 0.6px
+  );
+  background-size: 3px 3px;
+  opacity: 0.05;
+  mix-blend-mode: screen;
+}
+
+/* Adinkra-inspired geometric backdrop, kept at very low opacity */
+@utility pattern-adinkra {
+  background-image:
+    linear-gradient(
+      135deg,
+      var(--color-primary) 25%,
+      transparent 25%,
+      transparent 75%,
+      var(--color-primary) 75%
+    ),
+    linear-gradient(
+      45deg,
+      var(--color-primary) 25%,
+      transparent 25%,
+      transparent 75%,
+      var(--color-primary) 75%
+    );
+  background-size: 46px 46px;
+  background-position:
+    0 0,
+    23px 23px;
+  opacity: 0.02;
+}
+
+@utility ember-glow {
+  background: radial-gradient(
+    circle at 50% 50%,
+    oklch(0.64 0.17 44 / 0.16),
+    transparent 62%
+  );
+}
+
+@utility hover-lift {
+  transition:
+    transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 0.35s ease;
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lift);
+  }
+}
+
+/* ---------- Keyframes ---------- */
+
+@keyframes moment-rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes moment-float {
+  0%,
+  100% {
+    transform: translateY(-8px) rotate(-1.2deg);
+  }
+  50% {
+    transform: translateY(10px) rotate(1.2deg);
+  }
+}
+
+@keyframes moment-pulse-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes moment-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes moment-sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+@utility animate-rise {
+  animation: moment-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@utility animate-float-slow {
+  animation: moment-float 9s ease-in-out infinite;
+}
+@utility animate-pulse-ring {
+  animation: moment-pulse-ring 2.6s ease-out infinite;
+}
+@utility animate-sweep {
+  animation: moment-sweep 2.2s ease-in-out infinite;
+}
+
+/* ---------- 3D dice ---------- */
+
+@utility dice-scene {
+  perspective: 900px;
+}
+
+@utility dice-cube {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 1.6s cubic-bezier(0.16, 0.9, 0.2, 1);
+}
+
+@utility dice-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  padding: 12%;
+  border-radius: 18%;
+  border: 1px solid oklch(0.95 0.016 85 / 0.14);
+  background:
+    linear-gradient(
+      145deg,
+      oklch(0.42 0.05 45) 0%,
+      oklch(0.3 0.04 40) 55%,
+      oklch(0.2 0.02 40) 100%
+    );
+  box-shadow:
+    inset 0 0 40px oklch(0.64 0.17 44 / 0.18),
+    0 0 50px -12px oklch(0.64 0.17 44 / 0.5);
+}
+
+@utility dice-pip {
+  border-radius: 999px;
+  background: var(--color-foreground);
+  box-shadow: 0 0 14px oklch(0.64 0.17 44 / 0.9);
+}
