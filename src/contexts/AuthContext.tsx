@@ -50,6 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, phone: string, password: string) => {
     const response = await api.auth.login({ email, phone, password });
     if (response.success && response.user) {
+      // Store token in localStorage for cross-domain requests
+      if (response.token) {
+        localStorage.setItem('token', response.token);
+      }
       setUser(response.user);
     }
   };
@@ -57,12 +61,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (data: any) => {
     const response = await api.auth.register(data);
     if (response.success && response.user) {
+      // Store token in localStorage for cross-domain requests
+      if (response.token) {
+        localStorage.setItem('token', response.token);
+      }
       setUser(response.user);
     }
   };
 
   const logout = async () => {
     await api.auth.logout();
+    localStorage.removeItem('token');
     setUser(null);
   };
 

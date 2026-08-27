@@ -13,10 +13,15 @@ async function request<T>(
 ): Promise<ApiResponse<T>> {
   const url = `${API_BASE_URL}${endpoint}`;
   
+  // Get token from localStorage for cross-domain requests
+  const token = localStorage.getItem('token');
+  console.log('API Request:', endpoint, 'Token exists:', !!token);
+  
   const config: RequestInit = {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       ...options.headers,
     },
     credentials: 'include',

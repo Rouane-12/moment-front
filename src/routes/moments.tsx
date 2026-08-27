@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { SiteNav } from "@/components/moment/SiteNav";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { formatFcfa } from "@/lib/moment-engine";
 import { api } from "@/lib/api";
@@ -81,7 +80,6 @@ function Moments() {
   return (
     <ProtectedRoute>
       <div className="grain min-h-screen pb-24">
-        <SiteNav />
         <div className="relative mx-auto max-w-4xl px-5 py-12">
           <div className="pattern-adinkra pointer-events-none fixed inset-0" />
           <div className="relative">
