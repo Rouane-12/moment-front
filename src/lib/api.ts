@@ -292,6 +292,20 @@ export const api = {
       }),
   },
 
+  guest: {
+    check: (fingerprint: string) =>
+      request('/api/guest/check', {
+        method: 'POST',
+        body: JSON.stringify({ fingerprint }),
+      }),
+
+    increment: (fingerprint: string) =>
+      request('/api/guest/increment', {
+        method: 'POST',
+        body: JSON.stringify({ fingerprint }),
+      }),
+  },
+
   chat: {
     getConversations: () =>
       request('/api/chat/conversations'),

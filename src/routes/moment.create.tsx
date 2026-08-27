@@ -65,7 +65,7 @@ function Chip({
 }
 
 function CreateMoment() {
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [city, setCity] = useState("Cotonou");
@@ -78,6 +78,8 @@ function CreateMoment() {
   const [rolling, setRolling] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [error, setError] = useState("");
+  const [guestLimit, setGuestLimit] = useState<{ allowed: boolean; remaining: number; count: number } | null>(null);
+  const [fingerprint, setFingerprint] = useState("");
 
   // Redirect admin and partners away from moment creation
   useEffect(() => {
@@ -85,6 +87,20 @@ function CreateMoment() {
       navigate({ to: isAdmin ? '/admin' : '/partner' });
     }
   }, [isAdmin, user, navigate]);
+
+  // Check guest limit on mount
+  useEffect(() => {
+    if (!isAuthenticated) {
+      import('@/lib/fingerprint').then(({ getDeviceFingerprint }) => {
+        getDeviceFingerprint().then((fp) => {
+          setFingerprint(fp);
+          api.guest.check(fp).then((res: any) => {
+            setGuestLimit({ allowed: res.allowed, remaining: res.remaining, count: res.count });
+          });
+        });
+      });
+    }
+  }, [isAuthenticated]);
 
   console.log("CreateMoment render - step:", step, "city:", city, "people:", people);
 
@@ -358,18 +374,44 @@ function CreateMoment() {
                   <p>{vibes.length ? vibes.join(" · ") : "surprise"}</p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowPayment(true)}
-                  className="group mx-auto mt-12 flex flex-col items-center gap-5"
-                >
-                  <span className="block transition-transform duration-500 group-hover:scale-110 group-hover:rotate-12">
-                    <Dice size={110} value={5} spinning={false} />
-                  </span>
-                  <span className="rounded-full bg-primary px-8 py-4 text-sm font-bold uppercase tracking-[0.25em] text-primary-foreground">
-                    Payer 200 FCFA et lancer
-                  </span>
-                </button>
+                {/* Guest limit reached */}
+                {!isAuthenticated && guestLimit && !guestLimit.allowed ? (
+                  <div className="mt-12 space-y-6">
+                    <div className="surface-panel p-6 max-w-sm mx-auto">
+                      <p className="text-2xl font-bold text-primary mb-2">0 moment restant</p>
+                      <p className="text-sm text-muted-foreground">
+                        Vous avez utilisé vos {20} moments gratuits.
+                        Connectez-vous pour continuer à créer des moments !
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => navigate({ to: '/auth/register' })}
+                      className="rounded-full bg-primary px-8 py-4 text-sm font-bold uppercase tracking-[0.25em] text-primary-foreground"
+                    >
+                      Créer un compte gratuit
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isAuthenticated) {
+                        setShowPayment(true);
+                      } else {
+                        // Guest: generate directly (free)
+                        setRolling(true);
+                      }
+                    }}
+                    className="group mx-auto mt-12 flex flex-col items-center gap-5"
+                  >
+                    <span className="block transition-transform duration-500 group-hover:scale-110 group-hover:rotate-12">
+                      <Dice size={110} value={5} spinning={rolling} />
+                    </span>
+                    <span className="rounded-full bg-primary px-8 py-4 text-sm font-bold uppercase tracking-[0.25em] text-primary-foreground">
+                      {isAuthenticated ? `Payer ${formatFcfa(200)} et lancer` : `Lancer le dé (${guestLimit?.remaining || 20} restants)`}
+                    </span>
+                  </button>
+                )}
               </div>
             )}
           </div>
