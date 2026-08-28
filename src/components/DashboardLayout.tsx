@@ -13,7 +13,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-[#0a0a0a]">
       <DashboardSidebar />
       <main className="min-h-screen lg:pl-64 transition-all duration-300">
-        <div className="p-4 sm:p-6 lg:p-8">{children}</div>
+        <div className="pt-16 lg:pt-8 px-4 sm:px-6 lg:px-8 pb-8">{children}</div>
       </main>
     </div>
   );

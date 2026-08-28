@@ -1,11 +1,11 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { ContactShadows } from "@react-three/drei";
+import { ContactShadows, RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
 import { ROLL_THEMES } from "@/lib/moment-engine";
 
 /* ── Pip layout: which grid positions are filled for each face value ── */
-const G = 0.26; // grid spacing (bigger pips)
+const G = 0.28; // grid spacing (bigger pips)
 const PIP_MAP: Record<number, [number, number][]> = {
   1: [[0, 0]],
   2: [[-G, G], [G, -G]],
@@ -16,7 +16,7 @@ const PIP_MAP: Record<number, [number, number][]> = {
 };
 
 /* ── Face configs: position + rotation on the cube for each pip face ── */
-const H = 0.76; // smaller dice (was 0.905)
+const H = 0.76;
 const FACE_CONFIGS = [
   { value: 1, pos: [0, 0, H] as [number, number, number], rot: [0, 0, 0] as [number, number, number] },
   { value: 2, pos: [H, 0, 0] as [number, number, number], rot: [0, Math.PI / 2, 0] as [number, number, number] },
@@ -41,9 +41,9 @@ const FACE_UP: Record<number, [number, number, number]> = {
    ──────────────────────────────────────────────── */
 function Pip({ x, y }: { x: number; y: number }) {
   return (
-    <mesh position={[x, y, 0.025]} castShadow>
-      <sphereGeometry args={[0.08, 16, 16]} />
-      <meshStandardMaterial color="#1a1008" roughness={0.4} metalness={0.1} />
+    <mesh position={[x, y, 0.028]} castShadow>
+      <sphereGeometry args={[0.095, 20, 20]} />
+      <meshStandardMaterial color="#1a1008" roughness={0.3} metalness={0.15} />
     </mesh>
   );
 }
@@ -183,13 +183,12 @@ function Dice({
     }
   });
 
-  const DICE_SIZE = 1.48; // smaller dice
+  const DICE_SIZE = 1.48;
 
   return (
     <group ref={groupRef} position={[0, 0, 0]}>
-      {/* Dice body — warm cream/orange tint */}
-      <mesh castShadow receiveShadow>
-        <boxGeometry args={[DICE_SIZE, DICE_SIZE, DICE_SIZE, 6, 6, 6]} />
+      {/* Dice body — RoundedBox for smooth rounded edges */}
+      <RoundedBox args={[DICE_SIZE, DICE_SIZE, DICE_SIZE]} radius={0.12} smoothness={6} castShadow receiveShadow>
         <meshPhysicalMaterial
           color="#f5e6c8"
           roughness={0.2}
@@ -198,18 +197,7 @@ function Dice({
           clearcoatRoughness={0.1}
           envMapIntensity={0.8}
         />
-      </mesh>
-      {/* Edge highlight shell */}
-      <mesh>
-        <boxGeometry args={[DICE_SIZE + 0.04, DICE_SIZE + 0.04, DICE_SIZE + 0.04]} />
-        <meshPhysicalMaterial
-          color="#fff3e0"
-          transparent
-          opacity={0.05}
-          roughness={0.05}
-          metalness={0}
-        />
-      </mesh>
+      </RoundedBox>
       {/* Pips on all 6 faces */}
       {FACE_CONFIGS.map((f) => (
         <FacePips key={f.value} value={f.value} position={f.pos} rotation={f.rot} />
@@ -284,7 +272,6 @@ export function DiceRollOverlay3D({
   const [lines, setLines] = useState(0);
   const [landed, setLanded] = useState(false);
   const resultRef = useRef(6);
-  // ✅ FIX: stable ref for onSettled to avoid stale closure cancelling setTimeout
   const onSettledRef = useRef(onSettled);
   onSettledRef.current = onSettled;
 
@@ -312,18 +299,26 @@ export function DiceRollOverlay3D({
     setLanded(true);
   }, []);
 
-  // ✅ FIX: onSettledRef eliminates stale closure — timer never gets cancelled
+  // ✅ FIX: Separate effect — detect landing, set phase to "settled"
+  // This effect ONLY transitions the phase. It does NOT set a timeout.
   useEffect(() => {
-    if (!landed || phase !== "spin") return;
-    setValue(resultRef.current);
-    setPhase("settled");
+    if (landed && phase === "spin") {
+      setValue(resultRef.current);
+      setPhase("settled");
+    }
+  }, [landed, phase]);
+
+  // ✅ FIX: Separate effect — when settled, fire onSettled after delay
+  // This effect is independent of `landed`, so no stale closure issue.
+  useEffect(() => {
+    if (phase !== "settled") return;
 
     const timer = setTimeout(() => {
       onSettledRef.current(resultRef.current);
     }, 2800);
 
     return () => clearTimeout(timer);
-  }, [landed, phase]);
+  }, [phase]);
 
   if (!open) return null;
   const theme = ROLL_THEMES[value] ?? ROLL_THEMES[1]!;

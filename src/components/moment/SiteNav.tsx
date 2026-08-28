@@ -14,6 +14,9 @@ export function SiteNav() {
   const { user, isAuthenticated, logout, isAdmin } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Don't render SiteNav for authenticated users — they use the sidebar
+  if (isAuthenticated) return null;
+
   return (
     <>
       <header className="glass-panel sticky top-0 z-40 border-b border-border">
