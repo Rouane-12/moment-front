@@ -16,7 +16,7 @@ type VenueRequest = {
   name: string;
   category: string;
   address: string;
-  city: string;
+  city: string;  
   phone: string;
   status: 'pending' | 'approved' | 'rejected' | 'paid' | 'completed';
   paymentStatus: 'pending' | 'paid' | 'failed';
