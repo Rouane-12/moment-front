@@ -409,39 +409,39 @@ export const VENUES: Venue[] = [
 ];
 
 export const VIBES = [
-  { id: "festif", label: "Festif", emoji: "🔥" },
-  { id: "chill", label: "Chill", emoji: "🌴" },
-  { id: "gaming", label: "Gaming", emoji: "🎮" },
-  { id: "food", label: "Food", emoji: "🍽" },
-  { id: "cine", label: "Ciné", emoji: "🎬" },
-  { id: "romantique", label: "Romantique", emoji: "❤️" },
-  { id: "concert", label: "Concert", emoji: "🎤" },
-  { id: "culture", label: "Culture", emoji: "🎨" },
+  { id: "festif", label: "Festif", icon: "Flame" },
+  { id: "chill", label: "Chill", icon: "PalmTree" },
+  { id: "gaming", label: "Gaming", icon: "Gamepad2" },
+  { id: "food", label: "Gastronomie", icon: "UtensilsCrossed" },
+  { id: "cine", label: "Cinéma", icon: "Clapperboard" },
+  { id: "romantique", label: "Romantique", icon: "Heart" },
+  { id: "concert", label: "Concert", icon: "Music" },
+  { id: "culture", label: "Culture", icon: "Palette" },
 ] as const;
 
 export const TRANSPORTS = [
-  { id: "voiture", label: "Voiture", emoji: "🚗" },
-  { id: "moto", label: "Zem / moto", emoji: "🛵" },
-  { id: "taxi", label: "Taxi", emoji: "🚕" },
-  { id: "pied", label: "À pied", emoji: "🚶" },
-  { id: "peu_importe", label: "Peu importe", emoji: "✨" },
+  { id: "voiture", label: "Voiture", icon: "Car" },
+  { id: "moto", label: "Zem / moto", icon: "Bike" },
+  { id: "taxi", label: "Taxi", icon: "Taxi" },
+  { id: "pied", label: "À pied", icon: "Footprints" },
+  { id: "peu_importe", label: "Peu importe", icon: "Shuffle" },
 ] as const;
 
 export const ROLL_THEMES: Record<
   number,
-  { key: string; label: string; emoji: string; categories: Category[] }
+  { key: string; label: string; icon: string; categories: Category[] }
 > = {
-  1: { key: "chill", label: "Chill", emoji: "🌴", categories: ["plage", "bar", "food"] },
-  2: { key: "food", label: "Food", emoji: "🍽", categories: ["food", "rooftop", "bar"] },
-  3: { key: "fun", label: "Fun", emoji: "🎮", categories: ["gaming", "food", "bar"] },
+  1: { key: "chill", label: "Détente", icon: "Palmtree", categories: ["plage", "bar", "food"] },
+  2: { key: "food", label: "Gastronomie", icon: "UtensilsCrossed", categories: ["food", "rooftop", "bar"] },
+  3: { key: "fun", label: "Fun", icon: "Gamepad2", categories: ["gaming", "food", "bar"] },
   4: {
     key: "entertainment",
-    label: "Entertainment",
-    emoji: "🎬",
+    label: "Divertissement",
+    icon: "Clapperboard",
     categories: ["gaming", "food", "rooftop"],
   },
-  5: { key: "night", label: "Night", emoji: "🎤", categories: ["food", "concert", "rooftop"] },
-  6: { key: "surprise", label: "Surprise", emoji: "🎲", categories: ["culture", "food", "concert"] },
+  5: { key: "night", label: "Soirée", icon: "Music", categories: ["food", "concert", "rooftop"] },
+  6: { key: "surprise", label: "Surprise", icon: "Sparkles", categories: ["culture", "food", "concert"] },
 };
 
 export type MomentParams = {
@@ -477,11 +477,11 @@ export type Moment = {
 };
 
 const TITLES: Record<string, string[]> = {
-  chill: ["Sunset Mode", "Slow Cotonou", "Palm & Breeze"],
+  chill: ["Coucher de Soleil", "Cotonou Zen", "Palmeraie & Brise"],
   food: ["Table Ouverte", "Braise & Co", "Goût de la Nuit"],
-  fun: ["Manettes & Grillades", "Arcade Run", "Score Party"],
-  entertainment: ["Écran Total", "Night Arcade", "Grand Jeu"],
-  night: ["Afrobeat Nocturne", "Live & Late", "Cotonou After"],
+  fun: ["Manettes & Grillades", "Session Arcade", "Soirée Jeux"],
+  entertainment: ["Écran Total", "Soirée Ciné", "Grand Jeu"],
+  night: ["Afrobeat Nocturne", "Live & Tard", "Cotonou After"],
   surprise: ["Carte Blanche", "Le Détour", "Hasard Choisi"],
 };
 
@@ -658,13 +658,13 @@ export function formatFcfa(n: number) {
   return `${n.toLocaleString("fr-FR").replace(/\u202f|\u00a0/g, " ")} FCFA`;
 }
 
-export const CATEGORY_META: Record<Category, { label: string; emoji: string }> = {
-  plage: { label: "Plage", emoji: "🌴" },
-  food: { label: "Restaurant", emoji: "🍽" },
-  gaming: { label: "Gaming", emoji: "🎮" },
-  bar: { label: "Bar", emoji: "🍹" },
-  cinema: { label: "Cinéma", emoji: "🎬" },
-  concert: { label: "Concert", emoji: "🎤" },
-  culture: { label: "Culture", emoji: "🎨" },
-  rooftop: { label: "Rooftop", emoji: "🌃" },
+export const CATEGORY_META: Record<Category, { label: string; icon: string }> = {
+  plage: { label: "Plage", icon: "Waves" },
+  food: { label: "Restaurant", icon: "UtensilsCrossed" },
+  gaming: { label: "Gaming", icon: "Gamepad2" },
+  bar: { label: "Bar", icon: "Wine" },
+  cinema: { label: "Cinéma", icon: "Clapperboard" },
+  concert: { label: "Concert", icon: "Music" },
+  culture: { label: "Culture", icon: "Palette" },
+  rooftop: { label: "Rooftop", icon: "Sunset" },
 };

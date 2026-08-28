@@ -3,6 +3,11 @@ import { useMemo, useState, useEffect } from "react";
 import { SiteNav } from "@/components/moment/SiteNav";
 import { CATEGORY_META, formatFcfa, type Category } from "@/lib/moment-engine";
 import { api } from "@/lib/api";
+import * as LucideIcons from "lucide-react";
+
+function getIcon(name: string) {
+  return (LucideIcons as any)[name] || LucideIcons.MapPin;
+}
 
 export const Route = createFileRoute("/explore")({
   head: () => ({
@@ -172,7 +177,7 @@ function Explore() {
                     </div>
                     <div className="p-4 md:p-5">
                       <p className="label-mono text-xs">
-                        {meta.emoji} {meta.label} · {v.district}
+                        {(() => { const I = getIcon(meta.icon); return <I className="inline h-3 w-3 mr-1" />; })()} {meta.label} · {v.district}
                       </p>
                       <h2 className="mt-2 text-xl md:text-2xl">{v.name}</h2>
                       <p className="mt-2 text-xs md:text-sm text-muted-foreground line-clamp-2">{v.tagline}</p>

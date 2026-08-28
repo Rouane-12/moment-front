@@ -4,7 +4,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { api } from "@/lib/api";
 import * as LucideIcons from "lucide-react";
 
-const { AlertTriangle, Send, CheckCircle } = LucideIcons;
+const { AlertTriangle, Send, CheckCircle, MapPin, Star, User, FileText } = LucideIcons;
 
 export const Route = createFileRoute("/report")({
   ssr: false,
@@ -12,10 +12,10 @@ export const Route = createFileRoute("/report")({
 });
 
 const REPORT_TYPES = [
-  { value: "venue", label: "Lieu", icon: "📍" },
-  { value: "review", label: "Avis", icon: "⭐" },
-  { value: "user", label: "Utilisateur", icon: "👤" },
-  { value: "other", label: "Autre", icon: "📝" },
+  { value: "venue", label: "Lieu", Icon: MapPin },
+  { value: "review", label: "Avis", Icon: Star },
+  { value: "user", label: "Utilisateur", Icon: User },
+  { value: "other", label: "Autre", Icon: FileText },
 ];
 
 const CATEGORIES = [
@@ -112,7 +112,7 @@ function ReportForm() {
                         : "border-border text-muted-foreground hover:border-primary/50"
                     }`}
                   >
-                    <span className="text-2xl">{t.icon}</span>
+                    <t.Icon className="h-6 w-6" />
                     <span className="text-sm font-semibold">{t.label}</span>
                   </button>
                 ))}

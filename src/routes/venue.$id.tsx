@@ -8,6 +8,10 @@ import * as LucideIcons from "lucide-react";
 
 const { Star, MapPin, Clock, Phone, ExternalLink } = LucideIcons;
 
+function getIcon(name: string) {
+  return (LucideIcons as any)[name] || MapPin;
+}
+
 export const Route = createFileRoute("/venue/$id")({
   component: VenueDetail,
 });
@@ -148,7 +152,7 @@ function VenueDetail() {
           <div className="flex items-start justify-between gap-4 mb-6">
             <div>
               <p className="label-mono">
-                {meta.emoji} {meta.label} · {venue.district || venue.city}
+                {(() => { const I = getIcon(meta.icon); return <><I className="inline h-4 w-4 mr-1" /></>; })()} {meta.label} · {venue.district || venue.city}
               </p>
               <h1 className="text-display text-4xl md:text-5xl uppercase mt-2">{venue.name}</h1>
             </div>

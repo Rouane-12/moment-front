@@ -3,9 +3,7 @@ import { useState, useEffect } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { formatFcfa } from "@/lib/moment-engine";
 import { api } from "@/lib/api";
-import beach from "@/assets/beach.jpg";
-import gaming from "@/assets/gaming.jpg";
-import rooftop from "@/assets/rooftop.jpg";
+import { Dice5 } from "lucide-react";
 
 export const Route = createFileRoute("/moments")({
   head: () => ({
@@ -38,7 +36,7 @@ type ApiMoment = {
   score: number;
   status: string;
   createdAt: string;
-  theme?: { emoji?: string };
+  theme?: { emoji?: string; icon?: string; label?: string };
   steps?: Array<{
     venue?: {
       media?: Array<{ url?: string }>;
@@ -131,7 +129,7 @@ function Moments() {
                       </p>
                       <h2 className="mt-2 text-xl md:text-2xl">{m.title}</h2>
                       <p className="mt-2 text-xs md:text-sm text-muted-foreground">
-                        {m.theme?.emoji} {m.steps?.length || 0} étapes · Score: {m.score}%
+                        <Dice5 className="inline h-3 w-3 mr-1" /> {m.steps?.length || 0} étapes · Score: {m.score}%
                       </p>
                       <p className="mt-3 text-xs md:text-sm">
                         {m.peopleCount} personnes · {formatFcfa(m.totalPrice)}

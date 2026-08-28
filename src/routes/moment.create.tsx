@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import * as LucideIcons from "lucide-react";
-const { CalendarDays, Clock, ChevronLeft, ChevronRight } = LucideIcons;
+const { CalendarDays, Clock, ChevronLeft, ChevronRight, Flame, Palmtree, Gamepad2, UtensilsCrossed, Clapperboard, Heart, Music, Palette, Car, Bike, Footprints, Shuffle, Sparkles, Moon, Sun, PartyPopper, CalendarClock, Dice5 } = LucideIcons as any;
 
 export const Route = createFileRoute("/moment/create")({
   ssr: false,
@@ -42,11 +42,11 @@ const CITIES = [
 ];
 
 const QUICK_WHENS = [
-  { id: "ce_soir", label: "Ce soir", icon: "🌙" },
-  { id: "demain", label: "Demain", icon: "☀️" },
-  { id: "ce_weekend", label: "Ce week-end", icon: "🎉" },
-  { id: "prochain_weekend", label: "Prochain week-end", icon: "📅" },
-  { id: "date_precise", label: "Date précise", icon: "📆" },
+  { id: "ce_soir", label: "Ce soir", Icon: Moon },
+  { id: "demain", label: "Demain", Icon: Sun },
+  { id: "ce_weekend", label: "Ce week-end", Icon: PartyPopper },
+  { id: "prochain_weekend", label: "Prochain week-end", Icon: CalendarClock },
+  { id: "date_precise", label: "Date précise", Icon: CalendarDays },
 ];
 
 const TIMES = [
@@ -341,7 +341,7 @@ function CreateMoment() {
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
                     {city === "Cotonou" &&
-                      "Hub urbain avec 21 lieux : rooftops, plages, nightlife"}
+                      "Hub urbain avec 21 lieux : rooftops, plages, vie nocturne"}
                     {city === "Porto-Novo" &&
                       "Capitale avec 10 lieux : patrimoine afro-brésilien, culture"}
                     {city === "Ouidah" &&
@@ -475,7 +475,7 @@ function CreateMoment() {
                       key={w.id}
                       active={when === w.id}
                       onClick={() => setWhen(w.id)}
-                      icon={<span>{w.icon}</span>}
+                      icon={<w.Icon className="h-4 w-4" />}
                     >
                       {w.label}
                     </Chip>
@@ -542,7 +542,7 @@ function CreateMoment() {
                       key={v.id}
                       active={vibes.includes(v.id)}
                       onClick={() => toggleVibe(v.id)}
-                      icon={<span>{v.emoji}</span>}
+                      icon={<span className="text-base">{(() => { const I = (LucideIcons as any)[v.icon]; return I ? <I className="h-4 w-4" /> : null; })()}</span>}
                     >
                       {v.label}
                     </Chip>
@@ -574,7 +574,7 @@ function CreateMoment() {
                       key={t.id}
                       active={transport === t.id}
                       onClick={() => setTransport(t.id)}
-                      icon={<span>{t.emoji}</span>}
+                      icon={<span className="text-base">{(() => { const I = (LucideIcons as any)[t.icon]; return I ? <I className="h-4 w-4" /> : null; })()}</span>}
                     >
                       {t.label}
                     </Chip>
@@ -585,22 +585,17 @@ function CreateMoment() {
 
             {/* Step 6: Summary + dice */}
             {step === 6 && (
-              <div className="text-center">
-                <h1 className="text-display text-4xl md:text-5xl uppercase leading-tight">
-                  Qu'est-ce
-                  <br />
-                  qu'on fait
-                  <br />
+              <div className="text-center flex flex-col items-center py-4">
+                <h1 className="text-display text-3xl md:text-5xl uppercase leading-tight">
+                  Qu'est-ce<br />qu'on fait<br />
                   <span className="text-primary">ce soir ?</span>
                 </h1>
 
-                <div className="mt-8 space-y-1.5 text-sm uppercase tracking-[0.25em] text-muted-foreground">
+                <div className="mt-6 space-y-1.5 text-sm uppercase tracking-[0.25em] text-muted-foreground">
                   <p>{city}</p>
                   <p>{people} personnes</p>
                   <p>{formatFcfa(budget * people)}</p>
-                  <p>
-                    {getDisplayDate()} · {startTime}
-                  </p>
+                  <p>{getDisplayDate()} · {startTime}</p>
                   <p>{vibes.length ? vibes.join(" · ") : "surprise"}</p>
                 </div>
 
@@ -633,10 +628,10 @@ function CreateMoment() {
                         setRolling(true);
                       }
                     }}
-                    className="group mx-auto mt-12 flex flex-col items-center gap-5"
+                    className="group mx-auto mt-8 flex flex-col items-center gap-4"
                   >
                     <span className="block transition-transform duration-500 group-hover:scale-110 group-hover:rotate-12">
-                      <Dice size={110} value={5} spinning={rolling} />
+                      <Dice size={80} value={5} spinning={rolling} />
                     </span>
                     <span className="rounded-full bg-primary px-8 py-4 text-sm font-bold uppercase tracking-[0.25em] text-primary-foreground shadow-lg shadow-primary/30 group-hover:shadow-primary/50 transition-shadow">
                       {isAuthenticated
