@@ -1,5 +1,4 @@
-import { useRef } from "react";
-import { DiceRollOverlay3D } from "./DiceRoll3D";
+import { useRef, useState, useEffect, Suspense, lazy } from "react";
 
 /* ── CSS Dice for static display (landing page, summary screens) ── */
 
@@ -12,7 +11,6 @@ const PIP_LAYOUT: Record<number, number[]> = {
   6: [0, 2, 3, 5, 6, 8],
 };
 
-// front=1, right=2, top=3, bottom=4, left=5, back=6
 const FACE_TRANSFORMS: Record<number, string> = {
   1: "translateZ(var(--half))",
   2: "rotateY(90deg) translateZ(var(--half))",
@@ -80,7 +78,20 @@ export function Dice({
   );
 }
 
-/* ── Overlay: now delegates to the 3D version ── */
+/* ── Lazy-loaded 3D overlay (client-only, no SSR) ── */
+const LazyDiceOverlay3D = lazy(() =>
+  import("./DiceRoll3D").then((m) => ({ default: m.DiceRollOverlay3D }))
+);
+
+/* ── Client-only wrapper: returns null on server ── */
+function ClientOnly({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+  return <>{children}</>;
+}
+
+/* ── Overlay: fully client-only to prevent SSR hydration errors ── */
 export function DiceRollOverlay({
   open,
   onSettled,
@@ -88,5 +99,11 @@ export function DiceRollOverlay({
   open: boolean;
   onSettled: (value: number) => void;
 }) {
-  return <DiceRollOverlay3D open={open} onSettled={onSettled} />;
+  return (
+    <ClientOnly>
+      <Suspense fallback={null}>
+        <LazyDiceOverlay3D open={open} onSettled={onSettled} />
+      </Suspense>
+    </ClientOnly>
+  );
 }

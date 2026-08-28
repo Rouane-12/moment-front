@@ -200,19 +200,21 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
           });
         });
 
-        diceGroup.position.set(0, 3, 0);
+        // Start dice off-screen (above) — invisible until spin starts
+        diceGroup.position.set(0, 10, 0);
         scene.add(diceGroup);
         diceMeshRef.current = diceGroup;
 
-        // Dice physics body
+        // Dice physics body — sleeping until spin
         const diceBody = new CANNON.Body({
           mass: 1,
           shape: new CANNON.Box(new CANNON.Vec3(half, half, half)),
           material: diceMaterial,
-          linearDamping: 0.1,
-          angularDamping: 0.1,
+          linearDamping: 0.08,
+          angularDamping: 0.08,
         });
-        diceBody.position.set(0, 3, 0);
+        diceBody.position.set(0, 10, 0);
+        diceBody.sleep(); // Start sleeping — no physics until spin
         world.addBody(diceBody);
         diceBodyRef.current = diceBody;
 
@@ -251,22 +253,35 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
     };
   }, []);
 
-  // Handle spin
+  // Handle spin — launch the dice with dramatic physics
   useEffect(() => {
     if (!spinning || !ready || !diceBodyRef.current) return;
 
     const body = diceBodyRef.current;
     body.wakeUp();
-    body.position.set(0, 3, 0);
+    // Reset position above screen
+    body.position.set(
+      (Math.random() - 0.5) * 1.5,
+      4 + Math.random() * 2,
+      (Math.random() - 0.5) * 1.5,
+    );
+    body.quaternion.set(
+      Math.random(),
+      Math.random(),
+      Math.random(),
+      1,
+    );
+    body.quaternion.normalize();
+    // Strong upward + lateral impulse for dramatic spin
     body.velocity.set(
-      (Math.random() - 0.5) * 6,
-      14 + Math.random() * 4,
-      (Math.random() - 0.5) * 6,
+      (Math.random() - 0.5) * 8,
+      18 + Math.random() * 6,
+      (Math.random() - 0.5) * 8,
     );
     body.angularVelocity.set(
-      (Math.random() - 0.5) * 20,
-      (Math.random() - 0.5) * 20,
-      (Math.random() - 0.5) * 20,
+      (Math.random() - 0.5) * 25,
+      (Math.random() - 0.5) * 25,
+      (Math.random() - 0.5) * 25,
     );
 
     // Detect settle
