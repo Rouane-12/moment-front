@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useState, useEffect } from "react";
-import { Dice, DiceRollOverlay } from "@/components/moment/DiceRoll";
+import { DiceRollOverlay } from "@/components/moment/DiceRoll";
 import { KkiapayWidget } from "@/components/KkiapayWidget";
 import { TRANSPORTS, VIBES, formatFcfa } from "@/lib/moment-engine";
 import { api } from "@/lib/api";
@@ -728,7 +728,7 @@ function CreateMoment() {
                     onClick={() => setRolling(true)}
                     className="group mx-auto mt-10 flex flex-col items-center gap-4"
                   >
-                    <Dice size={80} value={5} spinning={rolling} />
+                    <img src="/dé.png" alt="Dé MOMENT" className="w-20 h-20 object-contain" style={{ filter: rolling ? 'blur(2px)' : 'none' }} />
                     <span className="rounded-full bg-primary px-8 py-3 text-sm font-bold uppercase tracking-[0.25em] text-primary-foreground shadow-lg shadow-primary/30 group-hover:shadow-primary/50 transition-shadow">
                       {isAuthenticated
                         ? "Lancer le dé"

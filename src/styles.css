@@ -324,3 +324,33 @@
   background: var(--color-foreground);
   box-shadow: 0 0 14px oklch(0.64 0.17 44 / 0.9);
 }
+
+/* ---------- Dice spin animation ---------- */
+@keyframes dice-spin {
+  0% {
+    transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1);
+  }
+  15% {
+    transform: rotateX(180deg) rotateY(120deg) rotateZ(90deg) scale(1.1);
+  }
+  30% {
+    transform: rotateX(360deg) rotateY(300deg) rotateZ(180deg) scale(1.05);
+  }
+  50% {
+    transform: rotateX(600deg) rotateY(540deg) rotateZ(360deg) scale(1.08);
+  }
+  70% {
+    transform: rotateX(820deg) rotateY(720deg) rotateZ(450deg) scale(1.03);
+  }
+  85% {
+    transform: rotateX(950deg) rotateY(840deg) rotateZ(500deg) scale(1.01);
+  }
+  100% {
+    transform: rotateX(1080deg) rotateY(960deg) rotateZ(540deg) scale(1);
+  }
+}
+
+@utility animate-dice-spin {
+  animation: dice-spin 2.6s cubic-bezier(0.2, 0.1, 0.1, 1) forwards;
+}
+
