@@ -43,7 +43,7 @@ const FACE_UP: Record<number, [number, number, number]> = {
    ──────────────────────────────────────────────── */
 function Pip({ x, y }: { x: number; y: number }) {
   return (
-    <mesh position={[x, y, DICE_SIZE / 2 + 0.005]} castShadow>
+    <mesh position={[x, y, 0.01]} castShadow>
       <sphereGeometry args={[PIP_R, 24, 24]} />
       <meshStandardMaterial color="#1a1008" roughness={0.3} metalness={0.15} />
     </mesh>
