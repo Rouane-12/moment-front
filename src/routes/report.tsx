@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { SiteNav } from "@/components/moment/SiteNav";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { api } from "@/lib/api";
 import * as LucideIcons from "lucide-react";
@@ -65,7 +64,6 @@ function ReportForm() {
     return (
       <ProtectedRoute>
         <div className="grain min-h-screen">
-          <SiteNav />
           <div className="mx-auto max-w-md px-5 py-20 text-center">
             <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckCircle className="h-8 w-8 text-green-500" />
@@ -89,7 +87,6 @@ function ReportForm() {
   return (
     <ProtectedRoute>
       <div className="grain min-h-screen">
-        <SiteNav />
         <div className="mx-auto max-w-lg px-5 py-12">
           <div className="flex items-center gap-3 mb-2">
             <AlertTriangle className="h-6 w-6 text-primary" />

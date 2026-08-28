@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { SiteNav } from "@/components/moment/SiteNav";
 import { formatFcfa } from "@/lib/moment-engine";
 
 type Search = {
@@ -51,7 +50,6 @@ function Booking() {
 
   return (
     <div className="grain min-h-screen">
-      <SiteNav />
       <div className="relative mx-auto max-w-2xl px-5 py-14">
         <div className="pattern-adinkra pointer-events-none fixed inset-0" />
 

@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { SiteNav } from "@/components/moment/SiteNav";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -13,8 +12,7 @@ function Profile() {
   return (
     <ProtectedRoute>
       <div className="grain min-h-screen">
-        <SiteNav />
-        <div className="mx-auto max-w-4xl px-4 md:px-5 py-8 md:py-14">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6 py-8 md:py-14">
           <div className="pattern-adinkra pointer-events-none fixed inset-0" />
           
           <div className="relative">

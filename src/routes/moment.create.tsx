@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useState, useEffect } from "react";
-import { SiteNav } from "@/components/moment/SiteNav";
 import { Dice, DiceRollOverlay } from "@/components/moment/DiceRoll";
 import { KkiapayWidget } from "@/components/KkiapayWidget";
 import { TRANSPORTS, VIBES, formatFcfa } from "@/lib/moment-engine";
@@ -139,7 +138,6 @@ function CreateMoment() {
 
   return (
     <div className="grain min-h-screen">
-      <SiteNav />
       <DiceRollOverlay open={rolling} onSettled={onSettled} />
 
       <div className="relative mx-auto max-w-3xl px-5 py-14">

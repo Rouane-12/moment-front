@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { SiteNav } from "@/components/moment/SiteNav";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
@@ -348,8 +347,7 @@ function ChatPage() {
     return (
       <ProtectedRoute>
         <div className="grain min-h-screen">
-          {!isPartnerOrAdmin && <SiteNav />}
-          <div className="mx-auto max-w-lg px-4 py-5 pb-24">
+          <div className="mx-auto max-w-lg px-4 sm:px-6 py-5 pb-24">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="text-xl font-bold">Messages</h1>

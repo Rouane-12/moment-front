@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { SiteNav } from "@/components/moment/SiteNav";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
@@ -66,8 +65,7 @@ function HomeDashboard() {
   return (
     <ProtectedRoute>
       <div className="grain min-h-screen pb-24">
-        <SiteNav />
-        <div className="mx-auto max-w-5xl px-4 md:px-5 py-8 md:py-12">
+        <div className="mx-auto max-w-5xl py-8 md:py-12">
           {/* Header */}
           <div className="mb-6 md:mb-8">
             <p className="label-mono text-sm md:text-base">Bonjour {user?.firstName} 👋</p>

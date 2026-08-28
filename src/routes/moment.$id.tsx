@@ -1,6 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { SiteNav } from "@/components/moment/SiteNav";
 import { DiceRollOverlay } from "@/components/moment/DiceRoll";
 import { api } from "@/lib/api";
 import { CATEGORY_META, formatFcfa } from "@/lib/moment-engine";
@@ -155,7 +154,6 @@ function MomentResult() {
 
   return (
     <div className="grain min-h-screen pb-24">
-      <SiteNav />
       <DiceRollOverlay
         open={rolling}
         onSettled={async (roll) => {
