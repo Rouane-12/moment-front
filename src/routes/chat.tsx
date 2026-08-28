@@ -11,7 +11,7 @@ import * as LucideIcons from "lucide-react";
 
 const {
   MessageCircle, Send, QrCode, ArrowLeft, Check, CheckCheck, Search, X,
-  Camera, Shield, Mic, Paperclip, FileText, Square, Phone,
+  Camera, Shield, Mic, Paperclip, FileText, Square, Phone, PhoneOff,
   Play, Pause
 } = LucideIcons;
 
@@ -344,6 +344,7 @@ function ChatPage() {
       if (att.type === 'image') return '📷 Photo';
       if (att.type === 'voice') return '🎤 Message vocal';
       if (att.type === 'document') return `📄 ${att.name || 'Document'}`;
+      if (att.type === 'call') return att.status === 'missed' ? '📞 Appel manqué' : '📞 Appel';
     }
     return msg.content || '';
   };
@@ -568,6 +569,24 @@ function ChatPage() {
                             <p className="text-[10px] text-muted-foreground">{formatSize(att.size)}</p>
                           </div>
                         </a>
+                      )}
+                      {att.type === "call" && (
+                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl ${
+                          att.status === "missed"
+                            ? "bg-red-500/10 border border-red-500/20"
+                            : "bg-green-500/10 border border-green-500/20"
+                        }`}>
+                          {att.status === "missed" ? (
+                            <PhoneOff className="h-4 w-4 text-red-400" />
+                          ) : (
+                            <Phone className="h-4 w-4 text-green-400" />
+                          )}
+                          <span className={`text-xs font-semibold ${
+                            att.status === "missed" ? "text-red-400" : "text-green-400"
+                          }`}>
+                            {att.status === "missed" ? "Appel manqué" : "Appel"}
+                          </span>
+                        </div>
                       )}
                     </div>
                   ))}

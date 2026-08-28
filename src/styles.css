@@ -354,3 +354,29 @@
   animation: dice-spin 2.6s cubic-bezier(0.2, 0.1, 0.1, 1) forwards;
 }
 
+/* ---------- Native select dark mode ---------- */
+select {
+  color-scheme: dark;
+}
+select option {
+  background-color: #1a1a1a;
+  color: #f5f5f5;
+  padding: 8px 12px;
+}
+select option:hover {
+  background-color: #333;
+}
+
+/* ---------- Select chevron padding ---------- */
+select,
+.select-trigger {
+  padding-right: 2.5rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+

@@ -728,7 +728,7 @@ function CreateMoment() {
                     onClick={() => setRolling(true)}
                     className="group mx-auto mt-10 flex flex-col items-center gap-4"
                   >
-                    <img src="/dé.png" alt="Dé MOMENT" className="w-20 h-20 object-contain" style={{ filter: rolling ? 'blur(2px)' : 'none' }} />
+                    <img src="/dé.png" alt="Dé MOMENT" className="w-24 h-24 object-contain" style={{ filter: rolling ? 'blur(2px)' : 'none' }} />
                     <span className="rounded-full bg-primary px-8 py-3 text-sm font-bold uppercase tracking-[0.25em] text-primary-foreground shadow-lg shadow-primary/30 group-hover:shadow-primary/50 transition-shadow">
                       {isAuthenticated
                         ? "Lancer le dé"

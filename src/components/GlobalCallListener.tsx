@@ -72,13 +72,14 @@ export function GlobalCallListener() {
     return () => window.removeEventListener("start-outgoing-call", handler as any);
   }, [user]);
 
+  const [pendingOffer, setPendingOffer] = useState<IncomingCall | null>(null);
+
   const acceptCall = (call: IncomingCall) => {
     setIncomingCall(null);
+    setPendingOffer(call); // Set BEFORE callActive to ensure it's available
     setCallActive(true);
     setCallPeer(call.from);
     setCallDirection("incoming");
-    // Store the offer for the ActiveCallOverlay to use
-    window.__pendingCallOffer = call;
   };
 
   const rejectCall = () => {
@@ -92,8 +93,24 @@ export function GlobalCallListener() {
     if (callPeer && socketRef.current) {
       socketRef.current.emit("call-end", { to: callPeer._id });
     }
+    // If outgoing call ended before connection, send missed call message
+    if (callDirection === "outgoing" && callPeer && user) {
+      const convId = [user.id, callPeer._id].sort().join("_");
+      fetch(`${import.meta.env["VITE_API_URL"] || "http://localhost:5200"}/api/chat/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          receiverId: callPeer._id,
+          content: "",
+          attachments: [{ type: "call", status: "missed" }],
+        }),
+      }).catch(() => {});
+    }
     setCallActive(false);
     setCallPeer(null);
+    setCallDirection("outgoing");
+    setPendingOffer(null);
   };
 
   if (callActive && callPeer) {
@@ -103,7 +120,7 @@ export function GlobalCallListener() {
         socket={socketRef.current}
         user={user}
         direction={callDirection}
-        pendingOffer={window.__pendingCallOffer}
+        pendingOffer={pendingOffer}
         onEnd={endCall}
       />
     );
@@ -116,10 +133,6 @@ export function GlobalCallListener() {
   return null;
 }
 
-// Extend window for pending offer
-declare global {
-  interface Window { __pendingCallOffer?: IncomingCall; }
-}
 
 /* ══════════════════════════════════════
    Incoming Call UI — ring + accept/reject
