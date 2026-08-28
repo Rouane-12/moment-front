@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { io, Socket } from "socket.io-client";
 import { QRCodeSVG } from "qrcode.react";
 import { Html5Qrcode } from "html5-qrcode";
-import { VoiceCall } from "@/components/VoiceCall";
+
 import * as LucideIcons from "lucide-react";
 
 const {
@@ -59,8 +59,7 @@ function ChatPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [callUser, setCallUser] = useState<{ _id: string; firstName: string; lastName: string } | null>(null);
-  const [incomingCall, setIncomingCall] = useState<{ offer: any; from: { _id: string; firstName: string; lastName: string } } | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -95,23 +94,7 @@ function ChatPage() {
       loadConversations();
     });
 
-    // === INCOMING CALL ===
-    socket.on("call-init", (data: any) => {
-      console.log("📞 Incoming call from:", data.from, "offer:", !!data.offer);
-      setCallUser(data.from);
-      setIncomingCall({ offer: data.offer, from: data.from });
-    });
-
-    socket.on("connect", () => {
-      console.log("🔌 Socket connected, id:", socket.id);
-    });
-
-    socket.on("connect_error", (err) => {
-      console.error("🔌 Socket connection error:", err.message);
-    });
-
     return () => {
-      socket.off("call-init");
       socket.disconnect();
     };
   }, []);
@@ -129,6 +112,7 @@ function ChatPage() {
 
   const loadMessages = useCallback(async (convId: string) => {
     try {
+      setMessages([]); // Clear previous conversation messages
       const res = await api.chat.getMessages(convId);
       if (res.success) setMessages((res as any).messages || []);
       await api.chat.markRead(convId);
@@ -517,7 +501,12 @@ function ChatPage() {
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <button onClick={() => { setCallUser(selectedConv.otherUser); setIncomingCall(null); }}
+            <button onClick={() => {
+              // Dispatch event for GlobalCallListener to handle
+              window.dispatchEvent(new CustomEvent('start-outgoing-call', {
+                detail: { targetUser: selectedConv.otherUser }
+              }));
+            }}
               className="p-2 rounded-xl bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
               title="Appel vocal">
               <Phone className="h-5 w-5" />
@@ -653,17 +642,7 @@ function ChatPage() {
         </div>
       </div>
 
-      {/* Voice Call Overlay */}
-      {callUser && socketRef.current && (
-        <VoiceCall
-          socket={socketRef.current}
-          user={user!}
-          targetUser={callUser}
-          incomingOffer={incomingCall?.offer}
-          incomingFrom={incomingCall?.from}
-          onEnd={() => { setCallUser(null); setIncomingCall(null); }}
-        />
-      )}
+
     </ProtectedRoute>
   );
 }

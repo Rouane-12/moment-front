@@ -750,15 +750,33 @@ function CreateMoment() {
             >
               Retour
             </button>
-            {step <= 6 && (
-              <button
-                type="button"
-                onClick={() => setStep((s) => Math.min(7, s + 1))}
-                className="rounded-full bg-secondary px-8 py-3 text-sm uppercase tracking-[0.2em] transition-colors hover:bg-accent"
-              >
-                Continuer →
-              </button>
-            )}
+            {step <= 6 && (() => {
+              // Validation: each step requires a valid selection
+              const stepValid = [
+                !!city,                            // Step 0: city
+                people >= 1,                       // Step 1: people
+                budget >= 2000,                    // Step 2: budget
+                !!when,                            // Step 3: when
+                vibes.length > 0,                  // Step 4: vibes (at least 1)
+                !!transport,                       // Step 5: transport
+                true,                              // Step 6: summary always ok
+              ];
+              const isValid = stepValid[step] ?? true;
+              return (
+                <button
+                  type="button"
+                  disabled={!isValid}
+                  onClick={() => setStep((s) => Math.min(7, s + 1))}
+                  className={`rounded-full px-8 py-3 text-sm uppercase tracking-[0.2em] transition-colors ${
+                    isValid
+                      ? "bg-secondary hover:bg-accent"
+                      : "bg-secondary/40 text-muted-foreground cursor-not-allowed"
+                  }`}
+                >
+                  Continuer →
+                </button>
+              );
+            })()}
           </div>
         </div>
       </div>

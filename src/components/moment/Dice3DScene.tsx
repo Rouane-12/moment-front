@@ -33,10 +33,10 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
         // Scene
         const scene = new THREE.Scene();
 
-        // Camera — pulled back to see full dice trajectory
-        const camera = new THREE.PerspectiveCamera(42, w / h, 0.1, 100);
-        camera.position.set(0, 3.5, 6);
-        camera.lookAt(0, 0.8, 0);
+        // Camera — positioned to see the dice in center
+        const camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
+        camera.position.set(0, 3, 5);
+        camera.lookAt(0, 0.5, 0);
 
         // Renderer
         const renderer = new THREE.WebGLRenderer({
@@ -70,7 +70,7 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
 
         // Cannon world
         const world = new CANNON.World({
-          gravity: new CANNON.Vec3(0, -25, 0),
+          gravity: new CANNON.Vec3(0, -30, 0),
         });
         world.allowSleep = true;
         worldRef.current = world;
@@ -107,12 +107,12 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
         floorMesh.receiveShadow = true;
         scene.add(floorMesh);
 
-        // Walls
+        // Walls — tight to keep dice centered
         const wallConfigs = [
-          { pos: [3, 1, 0], euler: [0, -Math.PI / 2, 0] },
-          { pos: [-3, 1, 0], euler: [0, Math.PI / 2, 0] },
-          { pos: [0, 1, 3], euler: [0, Math.PI, 0] },
-          { pos: [0, 1, -3], euler: [0, 0, 0] },
+          { pos: [1.5, 1, 0], euler: [0, -Math.PI / 2, 0] },
+          { pos: [-1.5, 1, 0], euler: [0, Math.PI / 2, 0] },
+          { pos: [0, 1, 1.5], euler: [0, Math.PI, 0] },
+          { pos: [0, 1, -1.5], euler: [0, 0, 0] },
         ];
         wallConfigs.forEach(({ pos, euler }) => {
           const wb = new CANNON.Body({
@@ -200,21 +200,21 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
           });
         });
 
-        // Start dice off-screen (above) — invisible until spin starts
-        diceGroup.position.set(0, 10, 0);
+        // Start dice at rest on floor — visible in center
+        diceGroup.position.set(0, 0.1, 0);
         scene.add(diceGroup);
         diceMeshRef.current = diceGroup;
 
-        // Dice physics body — sleeping until spin
+        // Dice physics body — at rest on floor until spin
         const diceBody = new CANNON.Body({
           mass: 1,
           shape: new CANNON.Box(new CANNON.Vec3(half, half, half)),
           material: diceMaterial,
-          linearDamping: 0.08,
-          angularDamping: 0.08,
+          linearDamping: 0.15,
+          angularDamping: 0.15,
         });
-        diceBody.position.set(0, 10, 0);
-        diceBody.sleep(); // Start sleeping — no physics until spin
+        diceBody.position.set(0, 0.1, 0);
+        diceBody.sleep();
         world.addBody(diceBody);
         diceBodyRef.current = diceBody;
 
@@ -259,29 +259,22 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
 
     const body = diceBodyRef.current;
     body.wakeUp();
-    // Reset position above screen
-    body.position.set(
-      (Math.random() - 0.5) * 1.5,
-      4 + Math.random() * 2,
-      (Math.random() - 0.5) * 1.5,
-    );
+    // Start from center, slightly above floor
+    body.position.set(0, 1.5, 0);
     body.quaternion.set(
-      Math.random(),
-      Math.random(),
-      Math.random(),
-      1,
+      Math.random(), Math.random(), Math.random(), 1,
     );
     body.quaternion.normalize();
-    // Strong upward + lateral impulse for dramatic spin
+    // Upward spin — stays centered, doesn't fly off
     body.velocity.set(
-      (Math.random() - 0.5) * 8,
-      18 + Math.random() * 6,
-      (Math.random() - 0.5) * 8,
+      (Math.random() - 0.5) * 2,
+      10 + Math.random() * 3,
+      (Math.random() - 0.5) * 2,
     );
     body.angularVelocity.set(
-      (Math.random() - 0.5) * 25,
-      (Math.random() - 0.5) * 25,
-      (Math.random() - 0.5) * 25,
+      (Math.random() - 0.5) * 20,
+      (Math.random() - 0.5) * 20,
+      (Math.random() - 0.5) * 20,
     );
 
     // Detect settle
@@ -332,6 +325,8 @@ function snapDice(body: any, value: number) {
 
   body.velocity.set(0, 0, 0);
   body.angularVelocity.set(0, 0, 0);
+  // Center the dice
+  body.position.set(0, 0.15, 0);
 
   if (_CANNON) {
     const target = rotations[value] || rotations[1];
@@ -339,5 +334,4 @@ function snapDice(body: any, value: number) {
     q.setFromEuler(target.x, target.y, target.z);
     body.quaternion.copy(q);
   }
-  body.position.y = 0.2;
 }
