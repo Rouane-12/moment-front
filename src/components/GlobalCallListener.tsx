@@ -45,7 +45,11 @@ export function GlobalCallListener() {
 
     socket.on("connect", () => {
       console.log("📞 Global call socket connected:", socket.id);
-      console.log("📞 Socket userId:", (socket as any).userId);
+    });
+
+    socket.on("socket-authenticated", (data: any) => {
+      console.log("📞 Socket authenticated with userId:", data.userId);
+      (socket as any).userId = data.userId;
     });
 
     socket.on("connect_error", (error) => {
@@ -79,10 +83,18 @@ export function GlobalCallListener() {
   // Outgoing call trigger from chat page
   useEffect(() => {
     const handler = (e: CustomEvent) => {
+      console.log("📞 start-outgoing-call event received:", e.detail);
       if (e.detail?.targetUser && socketRef.current && user) {
+        console.log("📞 Starting outgoing call to:", e.detail.targetUser);
         setCallActive(true);
         setCallPeer(e.detail.targetUser);
         setCallDirection("outgoing");
+      } else {
+        console.log("📞 Cannot start call - missing:", {
+          targetUser: !!e.detail?.targetUser,
+          socket: !!socketRef.current,
+          user: !!user
+        });
       }
     };
     window.addEventListener("start-outgoing-call", handler as any);
