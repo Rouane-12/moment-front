@@ -76,7 +76,7 @@ export function DiceRollOverlay3D({ open, onSettled }: Props) {
   const theme = ROLL_THEMES[value] ?? ROLL_THEMES[1]!;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-gradient-to-b from-[#1a0e04] via-[#120a02] to-[#0a0600]">
+    <div className="fixed inset-0 z-[90] flex flex-col items-center justify-center overflow-y-auto bg-gradient-to-b from-[#1a0e04] via-[#120a02] to-[#0a0600]">
       {/* Pattern bg */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.06]"
@@ -104,7 +104,7 @@ export function DiceRollOverlay3D({ open, onSettled }: Props) {
           <ClientOnly>
             <Suspense
               fallback={
-                <div className="w-[240px] h-[240px] md:w-[280px] md:h-[280px] flex items-center justify-center">
+                <div className="w-[200px] h-[200px] md:w-[220px] md:h-[220px] flex items-center justify-center">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F5A623]" />
                 </div>
               }

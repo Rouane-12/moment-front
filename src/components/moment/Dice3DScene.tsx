@@ -33,10 +33,10 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
         // Scene
         const scene = new THREE.Scene();
 
-        // Camera
-        const camera = new THREE.PerspectiveCamera(38, w / h, 0.1, 100);
-        camera.position.set(0, 4.5, 5.5);
-        camera.lookAt(0, 0.3, 0);
+        // Camera — pulled back to see full dice trajectory
+        const camera = new THREE.PerspectiveCamera(42, w / h, 0.1, 100);
+        camera.position.set(0, 3.5, 6);
+        camera.lookAt(0, 0.8, 0);
 
         // Renderer
         const renderer = new THREE.WebGLRenderer({
@@ -126,7 +126,7 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
         });
 
         // ── Dice mesh ──
-        const size = 0.8;
+        const size = 0.65;
         const half = size / 2;
         const diceGroup = new THREE.Group();
 
@@ -310,7 +310,7 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
   return (
     <div
       ref={containerRef}
-      className="w-[240px] h-[240px] md:w-[280px] md:h-[280px]"
+      className="w-[200px] h-[200px] md:w-[220px] md:h-[220px]"
       style={{ filter: "drop-shadow(0 8px 24px rgba(245,166,35,0.3))" }}
     />
   );

@@ -1,153 +1,184 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Phone, PhoneOff, Mic, MicOff, X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Phone, PhoneOff, Mic, MicOff } from "lucide-react";
 
 interface VoiceCallProps {
   socket: any;
   user: any;
   targetUser: { _id: string; firstName: string; lastName: string };
+  /** If provided, this is an incoming call — answer it. If null, initiate a new call. */
+  incomingOffer?: any;
+  incomingFrom?: { _id: string; firstName: string; lastName: string };
   onEnd: () => void;
 }
 
-export function VoiceCall({ socket, user, targetUser, onEnd }: VoiceCallProps) {
-  const [status, setStatus] = useState<"calling" | "ringing" | "connected" | "ended">("calling");
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+  ],
+};
+
+export function VoiceCall({
+  socket,
+  user,
+  targetUser,
+  incomingOffer,
+  incomingFrom,
+  onEnd,
+}: VoiceCallProps) {
+  const [status, setStatus] = useState<"calling" | "ringing" | "connected" | "ended">(
+    incomingOffer ? "ringing" : "calling",
+  );
   const [muted, setMuted] = useState(false);
   const [duration, setDuration] = useState(0);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cleanupRef = useRef(false);
 
-  const servers = {
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" },
-    ],
+  const cleanup = () => {
+    if (cleanupRef.current) return;
+    cleanupRef.current = true;
+    if (timerRef.current) clearInterval(timerRef.current);
+    peerRef.current?.close();
+    peerRef.current = null;
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    localStreamRef.current = null;
   };
 
-  const startCall = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      localStreamRef.current = stream;
+  // ── Create peer connection (shared logic) ──
+  const createPeer = (targetId: string) => {
+    const pc = new RTCPeerConnection(ICE_SERVERS);
+    peerRef.current = pc;
 
-      const pc = new RTCPeerConnection(servers);
-      peerRef.current = pc;
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit("call-ice-candidate", {
+          to: targetId,
+          candidate: event.candidate,
+        });
+      }
+    };
 
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+    pc.ontrack = (event) => {
+      if (remoteAudioRef.current && event.streams[0]) {
+        remoteAudioRef.current.srcObject = event.streams[0];
+      }
+    };
 
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit("call-ice-candidate", {
-            to: targetUser._id,
-            candidate: event.candidate,
-          });
-        }
-      };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
+        cleanup();
+        onEnd();
+      }
+    };
 
-      pc.ontrack = (event) => {
-        if (remoteAudioRef.current && event.streams[0]) {
-          remoteAudioRef.current.srcObject = event.streams[0];
-        }
-      };
+    return pc;
+  };
 
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
+  const startLocalStream = async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    localStreamRef.current = stream;
+    return stream;
+  };
 
-      socket.emit("call-init", {
-        to: targetUser._id,
-        offer,
-        from: { _id: user.id, firstName: user.firstName, lastName: user.lastName },
-      });
+  const startTimer = () => {
+    setDuration(0);
+    timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+  };
 
-      // Start duration timer
-      timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
-    } catch (e) {
-      console.error("Failed to start call:", e);
-      onEnd();
-    }
-  }, [socket, targetUser, user, onEnd]);
-
-  // Socket event handlers
+  // ── Effect: handle incoming call (answer) OR outgoing call (initiate) ──
   useEffect(() => {
     if (!socket) return;
 
-    socket.on("call-init", async (data: any) => {
-      setStatus("ringing");
-      // Auto-accept for now (in real app, show incoming call UI)
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      localStreamRef.current = stream;
+    // INCOMING CALL — answer it
+    if (incomingOffer && incomingFrom) {
+      (async () => {
+        try {
+          const stream = await startLocalStream();
+          const pc = createPeer(incomingFrom._id);
+          stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-      const pc = new RTCPeerConnection(servers);
-      peerRef.current = pc;
+          await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
 
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit("call-ice-candidate", {
-            to: data.from._id,
-            candidate: event.candidate,
+          socket.emit("call-answer", {
+            to: incomingFrom._id,
+            answer,
           });
+
+          setStatus("connected");
+          startTimer();
+        } catch (e) {
+          console.error("Failed to answer call:", e);
+          onEnd();
         }
-      };
+      })();
+    }
+    // OUTGOING CALL — initiate
+    else {
+      (async () => {
+        try {
+          const stream = await startLocalStream();
+          const pc = createPeer(targetUser._id);
+          stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-      pc.ontrack = (event) => {
-        if (remoteAudioRef.current && event.streams[0]) {
-          remoteAudioRef.current.srcObject = event.streams[0];
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+
+          socket.emit("call-init", {
+            to: targetUser._id,
+            offer,
+            from: { _id: user.id, firstName: user.firstName, lastName: user.lastName },
+          });
+        } catch (e) {
+          console.error("Failed to start call:", e);
+          onEnd();
         }
-      };
+      })();
+    }
 
-      await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-
-      socket.emit("call-answer", {
-        to: data.from._id,
-        answer,
-      });
-
-      setStatus("connected");
-      timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
-    });
-
-    socket.on("call-answer", async (data: any) => {
+    // Listen for answer (outgoing call) and ice candidates (both)
+    const handleAnswer = async (data: any) => {
       if (peerRef.current) {
         await peerRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
         setStatus("connected");
+        startTimer();
       }
-    });
+    };
 
-    socket.on("call-ice-candidate", async (data: any) => {
+    const handleIce = async (data: any) => {
       if (peerRef.current) {
-        await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+        try {
+          await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } catch (e) {
+          console.error("ICE candidate error:", e);
+        }
       }
-    });
+    };
 
-    socket.on("call-ended", () => {
+    const handleEnded = () => {
       cleanup();
       onEnd();
-    });
+    };
+
+    socket.on("call-answer", handleAnswer);
+    socket.on("call-ice-candidate", handleIce);
+    socket.on("call-ended", handleEnded);
 
     return () => {
-      socket.off("call-init");
-      socket.off("call-answer");
-      socket.off("call-ice-candidate");
-      socket.off("call-ended");
+      socket.off("call-answer", handleAnswer);
+      socket.off("call-ice-candidate", handleIce);
+      socket.off("call-ended", handleEnded);
+      cleanup();
     };
-  }, [socket]);
-
-  useEffect(() => {
-    startCall();
-    return () => cleanup();
-  }, []);
-
-  const cleanup = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    peerRef.current?.close();
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
-  };
+  }, [socket, targetUser._id, incomingOffer]);
 
   const endCall = () => {
-    socket.emit("call-end", { to: targetUser._id });
+    const otherId = incomingFrom?._id || targetUser._id;
+    socket.emit("call-end", { to: otherId });
     cleanup();
     onEnd();
   };
@@ -162,38 +193,47 @@ export function VoiceCall({ socket, user, targetUser, onEnd }: VoiceCallProps) {
   const formatDuration = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
+  const displayName = incomingFrom
+    ? `${incomingFrom.firstName} ${incomingFrom.lastName}`
+    : `${targetUser.firstName} ${targetUser.lastName}`;
+  const initials = incomingFrom
+    ? `${incomingFrom.firstName[0]}${incomingFrom.lastName[0]}`
+    : `${targetUser.firstName[0]}${targetUser.lastName[0]}`;
+
   return (
     <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center">
-      <audio ref={remoteAudioRef} autoPlay />
+      <audio ref={remoteAudioRef} autoPlay playsInline />
 
       {/* Avatar */}
       <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center mb-6">
-        <span className="text-primary text-3xl font-bold">
-          {targetUser.firstName[0]}{targetUser.lastName[0]}
-        </span>
+        <span className="text-primary text-3xl font-bold">{initials}</span>
       </div>
 
       {/* Name + status */}
-      <h2 className="text-xl font-bold text-white">{targetUser.firstName} {targetUser.lastName}</h2>
+      <h2 className="text-xl font-bold text-white">{displayName}</h2>
       <p className="text-sm text-muted-foreground mt-1">
         {status === "calling" && "Appel en cours..."}
-        {status === "ringing" && "Appel entrant..."}
+        {status === "ringing" && (incomingOffer ? "Appel entrant..." : "Sonner...")}
         {status === "connected" && formatDuration(duration)}
         {status === "ended" && "Appel terminé"}
       </p>
 
       {/* Controls */}
       <div className="flex items-center gap-6 mt-12">
-        <button onClick={toggleMute}
+        <button
+          onClick={toggleMute}
           className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
             muted ? "bg-red-500" : "bg-white/10 hover:bg-white/20"
-          }`}>
-          {muted ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
+          }`}
+        >
+          {muted ? <MicOff className="h-6 w-6 text-white" /> : <Mic className="h-6 w-6 text-white" />}
         </button>
 
-        <button onClick={endCall}
-          className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors">
-          <PhoneOff className="h-7 w-7" />
+        <button
+          onClick={endCall}
+          className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors"
+        >
+          <PhoneOff className="h-7 w-7 text-white" />
         </button>
       </div>
     </div>

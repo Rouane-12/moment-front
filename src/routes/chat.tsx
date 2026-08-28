@@ -60,6 +60,7 @@ function ChatPage() {
   const [recordingTime, setRecordingTime] = useState(0);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [callUser, setCallUser] = useState<{ _id: string; firstName: string; lastName: string } | null>(null);
+  const [incomingCall, setIncomingCall] = useState<{ offer: any; from: { _id: string; firstName: string; lastName: string } } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -93,7 +94,17 @@ function ChatPage() {
       loadConversations();
     });
 
-    return () => { socket.disconnect(); };
+    // === INCOMING CALL ===
+    socket.on("call-init", (data: any) => {
+      console.log("📞 Incoming call from:", data.from);
+      setCallUser(data.from);
+      setIncomingCall({ offer: data.offer, from: data.from });
+    });
+
+    return () => {
+      socket.off("call-init");
+      socket.disconnect();
+    };
   }, []);
 
   // === DATA LOADING ===
@@ -633,7 +644,9 @@ function ChatPage() {
           socket={socketRef.current}
           user={user!}
           targetUser={callUser}
-          onEnd={() => setCallUser(null)}
+          incomingOffer={incomingCall?.offer}
+          incomingFrom={incomingCall?.from}
+          onEnd={() => { setCallUser(null); setIncomingCall(null); }}
         />
       )}
     </ProtectedRoute>
