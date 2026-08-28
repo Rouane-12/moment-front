@@ -5,7 +5,10 @@ import * as THREE from "three";
 import { ROLL_THEMES } from "@/lib/moment-engine";
 
 /* ── Pip layout: which grid positions are filled for each face value ── */
-const G = 0.28; // grid spacing (bigger pips)
+const DICE_SIZE = 1.35;
+const H = DICE_SIZE / 2 + 0.01; // face center distance
+const G = DICE_SIZE * 0.2;       // grid spacing relative to dice
+const PIP_R = DICE_SIZE * 0.09;  // pip radius
 const PIP_MAP: Record<number, [number, number][]> = {
   1: [[0, 0]],
   2: [[-G, G], [G, -G]],
@@ -16,7 +19,6 @@ const PIP_MAP: Record<number, [number, number][]> = {
 };
 
 /* ── Face configs: position + rotation on the cube for each pip face ── */
-const H = 0.76;
 const FACE_CONFIGS = [
   { value: 1, pos: [0, 0, H] as [number, number, number], rot: [0, 0, 0] as [number, number, number] },
   { value: 2, pos: [H, 0, 0] as [number, number, number], rot: [0, Math.PI / 2, 0] as [number, number, number] },
@@ -41,8 +43,8 @@ const FACE_UP: Record<number, [number, number, number]> = {
    ──────────────────────────────────────────────── */
 function Pip({ x, y }: { x: number; y: number }) {
   return (
-    <mesh position={[x, y, 0.028]} castShadow>
-      <sphereGeometry args={[0.095, 20, 20]} />
+    <mesh position={[x, y, DICE_SIZE / 2 + 0.005]} castShadow>
+      <sphereGeometry args={[PIP_R, 24, 24]} />
       <meshStandardMaterial color="#1a1008" roughness={0.3} metalness={0.15} />
     </mesh>
   );
@@ -182,8 +184,6 @@ function Dice({
       }
     }
   });
-
-  const DICE_SIZE = 1.2;
 
   return (
     <group ref={groupRef} position={[0, 0, 0]}>
@@ -346,7 +346,7 @@ export function DiceRollOverlay3D({
         </p>
 
         {/* ── 3D Dice Canvas ── */}
-        <div className="relative w-[180px] h-[180px] md:w-[220px] md:h-[220px]">
+        <div className="relative w-[200px] h-[200px] md:w-[240px] md:h-[240px]">
           {phase === "spin" && (
             <span className="animate-pulse-ring absolute inset-2 rounded-full border-2 border-[#F5A623]/25" />
           )}

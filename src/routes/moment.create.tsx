@@ -203,7 +203,6 @@ function CreateMoment() {
   const [vibes, setVibes] = useState<string[]>([]);
   const [transport, setTransport] = useState("peu_importe");
   const [rolling, setRolling] = useState(false);
-  const [showPayment, setShowPayment] = useState(false);
   const [error, setError] = useState("");
   const [guestLimit, setGuestLimit] = useState<{
     allowed: boolean;
@@ -628,17 +627,18 @@ function CreateMoment() {
               </div>
             )}
 
-            {/* Step 7: Payment + Dice */}
+            {/* Step 7: Payment */}
             {step === 7 && (
               <div className="text-center flex flex-col items-center py-4">
                 <h1 className="text-display text-2xl md:text-3xl uppercase">
-                  Paiement & Lancement
+                  Paiement
                 </h1>
                 <p className="mt-3 text-muted-foreground text-sm">
-                  Puis lancez le dé pour générer votre moment
+                  {isAuthenticated
+                    ? "Payer les frais de service pour continuer"
+                    : "Lancez le dé gratuitement en tant qu'invité"}
                 </p>
 
-                {/* Guest: direct dice */}
                 {!isAuthenticated && guestLimit && !guestLimit.allowed ? (
                   <div className="mt-10 space-y-6">
                     <div className="surface-panel p-6 max-w-sm mx-auto">
@@ -655,38 +655,86 @@ function CreateMoment() {
                     </button>
                   </div>
                 ) : !isAuthenticated ? (
-                  /* Guest: direct dice */
+                  /* Guest: skip payment, go directly to dice */
+                  <button
+                    type="button"
+                    onClick={() => setStep(8)}
+                    className="mx-auto mt-10 surface-panel p-6 max-w-sm rounded-2xl"
+                  >
+                    <p className="text-sm text-muted-foreground mb-2">Moment invité gratuit</p>
+                    <p className="text-display text-3xl text-primary font-bold">0 FCFA</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {guestLimit?.remaining || 20} moment(s) restant(s)
+                    </p>
+                    <p className="mt-4 text-sm font-semibold text-primary uppercase tracking-widest">
+                      Passer au lancer →
+                    </p>
+                  </button>
+                ) : (
+                  /* Authenticated: show Kkiapay widget inline */
+                  <div className="mt-8 w-full max-w-sm mx-auto surface-panel p-6 rounded-2xl">
+                    <div className="text-center mb-4">
+                      <p className="text-sm text-muted-foreground">Frais de service MOMENT</p>
+                      <p className="text-display text-4xl text-primary font-bold mt-2">200 FCFA</p>
+                      <p className="text-xs text-muted-foreground mt-1">Par moment créé</p>
+                    </div>
+                    <KkiapayWidget
+                        amount={200}
+                        sandbox={true}
+                        onSuccess={(transactionId) => {
+                          console.log("Moment payment success:", transactionId);
+                          setRolling(false);
+                          setStep(8);
+                        }}
+                        onFailure={(err) => {
+                          console.error("Paiement échoué:", err);
+                          alert("Le paiement a échoué. Veuillez réessayer.");
+                        }}
+                        onClose={() => {}}
+                      />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 8: Lancer le dé */}
+            {step === 8 && (
+              <div className="text-center flex flex-col items-center py-4">
+                <h1 className="text-display text-2xl md:text-3xl uppercase">
+                  Lancez le dé !
+                </h1>
+                <p className="mt-3 text-muted-foreground text-sm">
+                  Le dé va déterminer la direction de votre soirée
+                </p>
+
+                {!isAuthenticated && guestLimit && !guestLimit.allowed ? (
+                  <div className="mt-10 space-y-6">
+                    <div className="surface-panel p-6 max-w-sm mx-auto">
+                      <p className="text-2xl font-bold text-primary mb-2">0 moment restant</p>
+                      <p className="text-sm text-muted-foreground">
+                        Connectez-vous pour continuer à créer des moments !
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => navigate({ to: "/auth/register" })}
+                      className="rounded-full bg-primary px-8 py-4 text-sm font-bold uppercase tracking-[0.25em] text-primary-foreground hover:scale-105 transition-transform"
+                    >
+                      Créer un compte gratuit
+                    </button>
+                  </div>
+                ) : (
                   <button
                     type="button"
                     onClick={() => setRolling(true)}
                     className="group mx-auto mt-10 flex flex-col items-center gap-4"
                   >
-                    <Dice size={72} value={5} spinning={rolling} />
-                    <span className="rounded-full bg-primary px-8 py-3 text-sm font-bold uppercase tracking-[0.25em] text-primary-foreground shadow-lg shadow-primary/30">
-                      Lancer le dé ({guestLimit?.remaining || 20} restants)
+                    <Dice size={80} value={5} spinning={rolling} />
+                    <span className="rounded-full bg-primary px-8 py-3 text-sm font-bold uppercase tracking-[0.25em] text-primary-foreground shadow-lg shadow-primary/30 group-hover:shadow-primary/50 transition-shadow">
+                      {isAuthenticated
+                        ? "Lancer le dé"
+                        : `Lancer (${guestLimit?.remaining || 20} restants)`}
                     </span>
                   </button>
-                ) : (
-                  /* Authenticated: payment first, then dice */
-                  <div className="mt-8 w-full max-w-md mx-auto">
-                    {!showPayment && !rolling ? (
-                      <button
-                        type="button"
-                        onClick={() => setShowPayment(true)}
-                        className="mx-auto flex flex-col items-center gap-4"
-                      >
-                        <Dice size={72} value={5} spinning={false} />
-                        <span className="rounded-full bg-primary px-8 py-3 text-sm font-bold uppercase tracking-[0.25em] text-primary-foreground shadow-lg shadow-primary/30">
-                          Payer {formatFcfa(200)} et lancer
-                        </span>
-                      </button>
-                    ) : rolling ? (
-                      <div className="flex flex-col items-center gap-4">
-                        <Dice size={72} value={5} spinning={true} />
-                        <p className="text-sm text-muted-foreground animate-pulse">Génération en cours...</p>
-                      </div>
-                    ) : null}
-                  </div>
                 )}
               </div>
             )}
@@ -702,7 +750,7 @@ function CreateMoment() {
             >
               Retour
             </button>
-            {step < 7 && (
+            {step <= 6 && (
               <button
                 type="button"
                 onClick={() => setStep((s) => Math.min(7, s + 1))}
@@ -715,45 +763,6 @@ function CreateMoment() {
         </div>
       </div>
 
-      {/* ── Kkiapay Payment Modal ── */}
-      {showPayment && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="surface-panel p-6 rounded-2xl max-w-md w-full mx-4 border border-border/50">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold">Paiement</h2>
-              <button
-                type="button"
-                onClick={() => setShowPayment(false)}
-                className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="text-center mb-6">
-              <p className="text-sm text-muted-foreground">Frais de service MOMENT</p>
-              <p className="text-display text-4xl text-primary font-bold mt-2">
-                200 FCFA
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">Par moment créé</p>
-            </div>
-            <KkiapayWidget
-              amount={200}
-              sandbox={true}
-              onSuccess={(transactionId) => {
-                setShowPayment(false);
-                console.log("Moment payment success:", transactionId);
-                setRolling(true);
-              }}
-              onFailure={(err) => {
-                console.error("Paiement échoué:", err);
-                alert("Le paiement a échoué. Veuillez réessayer.");
-                setShowPayment(false);
-              }}
-              onClose={() => setShowPayment(false)}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
