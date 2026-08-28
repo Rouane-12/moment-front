@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { ROLL_THEMES } from "@/lib/moment-engine";
+import { useRef } from "react";
+import { DiceRollOverlay3D } from "./DiceRoll3D";
+
+/* ── CSS Dice for static display (landing page, summary screens) ── */
 
 const PIP_LAYOUT: Record<number, number[]> = {
   1: [4],
@@ -35,7 +37,9 @@ function Face({ value }: { value: number }) {
     <div className="dice-face" style={{ transform: FACE_TRANSFORMS[value] ?? "" }}>
       {Array.from({ length: 9 }).map((_, i) => (
         <div key={i} className="flex items-center justify-center">
-          {pips.includes(i) ? <span className="dice-pip block size-[26%] min-h-2 min-w-2" /> : null}
+          {pips.includes(i) ? (
+            <span className="dice-pip block size-[26%] min-h-2 min-w-2" />
+          ) : null}
         </div>
       ))}
     </div>
@@ -76,14 +80,7 @@ export function Dice({
   );
 }
 
-const SCAN_LINES = [
-  "47 lieux analysés",
-  "12 activités disponibles",
-  "8 restaurants ouverts",
-  "5 événements ce soir",
-  "3 parcours compatibles",
-];
-
+/* ── Overlay: now delegates to the 3D version ── */
 export function DiceRollOverlay({
   open,
   onSettled,
@@ -91,78 +88,5 @@ export function DiceRollOverlay({
   open: boolean;
   onSettled: (value: number) => void;
 }) {
-  const [phase, setPhase] = useState<"spin" | "settled">("spin");
-  const [value, setValue] = useState(6);
-  const [ticker, setTicker] = useState(1);
-  const [lines, setLines] = useState(0);
-
-  useEffect(() => {
-    if (!open) return;
-    setPhase("spin");
-    setLines(0);
-    const result = 1 + Math.floor(Math.random() * 6);
-
-    const tick = setInterval(() => setTicker(1 + Math.floor(Math.random() * 6)), 110);
-    const scan = setInterval(() => setLines((l) => Math.min(SCAN_LINES.length, l + 1)), 520);
-
-    const stop = setTimeout(() => {
-      clearInterval(tick);
-      setValue(result);
-      setPhase("settled");
-    }, 2200);
-
-    const done = setTimeout(() => {
-      clearInterval(scan);
-      onSettled(result);
-    }, 5200);
-
-    return () => {
-      clearInterval(tick);
-      clearInterval(scan);
-      clearTimeout(stop);
-      clearTimeout(done);
-    };
-  }, [open, onSettled]);
-
-  if (!open) return null;
-  const theme = ROLL_THEMES[value] ?? ROLL_THEMES[1]!;
-
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/98">
-      <div className="pattern-adinkra pointer-events-none absolute inset-0" />
-      <div className="ember-glow pointer-events-none absolute inset-0" />
-
-      <div className="relative flex flex-col items-center gap-10 px-6 text-center">
-        <p className="label-mono">Le dé décide de la direction</p>
-
-        <div className="relative">
-          <span className="animate-pulse-ring absolute inset-0 rounded-full border border-primary/40" />
-          <Dice size={190} value={phase === "spin" ? ticker : value} spinning={phase === "spin"} />
-        </div>
-
-        {phase === "settled" ? (
-          <div className="animate-rise space-y-3">
-            <p className="text-display text-7xl text-primary">{value}</p>
-            <div className="h-px w-40 bg-border mx-auto" />
-            <p className="text-display text-3xl uppercase">
-              {theme.emoji} {theme.label}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              MOMENT compose ton parcours...
-            </p>
-          </div>
-        ) : (
-          <p className="text-display text-4xl uppercase text-muted-foreground">Ça tourne...</p>
-        )}
-
-        <ul className="min-h-28 space-y-2 text-sm text-muted-foreground">
-          {SCAN_LINES.slice(0, lines).map((l) => (
-            <li key={l} className="animate-rise">
-              <span className="text-primary">✓</span> {l}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
+  return <DiceRollOverlay3D open={open} onSettled={onSettled} />;
 }

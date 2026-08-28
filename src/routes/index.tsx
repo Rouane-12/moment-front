@@ -9,7 +9,12 @@ import { SiteNav } from "@/components/moment/SiteNav";
 import { ReviewsSlider } from "@/components/ReviewsSlider";
 import { useAuth } from "@/contexts/AuthContext";
 import * as LucideIcons from "lucide-react";
-const { Umbrella, Utensils, Gamepad2, Film, Mic, MapPin, Users, Clock, Star, ArrowRight, Sparkles, Zap, Shield, Heart, Check, Target, Compass, Calendar, Music, Coffee, Camera, Plane } = LucideIcons;
+const {
+  Umbrella, Utensils, Gamepad2, Film, Mic, MapPin, Users, Clock, Star,
+  ArrowRight, Sparkles, Zap, Shield, Heart, Check, Target, Compass,
+  Calendar, Music, Coffee, Camera, Plane, ChevronDown, ChevronUp,
+  CreditCard, Smartphone, HelpCircle, MessageCircle, Percent
+} = LucideIcons;
 
 export const Route = createFileRoute("/")({
   ssr: false,
@@ -32,7 +37,82 @@ export const Route = createFileRoute("/")({
   component: Landing,
 });
 
-const PHRASES = ["AFRICA IS NOT A PLACE TO VISIT.", "IT'S A MOMENT TO LIVE."];
+const PHRASES = [
+  "L'AFRIQUE N'EST PAS UN LIEU À VISITER.",
+  "C'EST UN MOMENT À VIVRE.",
+];
+
+/* ── FAQ Data ── */
+const FAQ_ITEMS = [
+  {
+    q: "Comment fonctionne MOMENT ?",
+    a: "Tu nous donnes la ville, le nombre de personnes, ton budget, le créneau et l'ambiance souhaitée. MOMENT compose automatiquement un parcours optimal : lieux, ordre, horaires, distances et budget. C'est un dé qui décide de la direction de ta soirée.",
+  },
+  {
+    q: "Combien ça coûte ?",
+    a: "MOMENT est gratuit pour les utilisateurs. La seule somme à payer est de 200 FCFA par moment créé, c'est un petit frais de service qui couvre l'analyse et la composition de ton parcours.",
+  },
+  {
+    q: "Quels sont les moyens de paiement ?",
+    a: "Nous utilisons Kkiapay, une solution de paiement sécurisée au Bénin. Tu peux payer par mobile money (Moov, MTN), carte bancaire ou virement. Le paiement est instantané et sécurisé.",
+  },
+  {
+    q: "Puis-je utiliser MOMENT gratuitement ?",
+    a: "Oui ! Les nouveaux utilisateurs disposent de 20 moments gratuits sans inscription. Tu peux essayer avant de créer un compte. Ensuite, chaque moment coûte seulement 200 FCFA.",
+  },
+  {
+    q: "Comment devenir partenaire ?",
+    a: "Si tu es gérant d'un lieu à Cotonou, Porto-Novo, Ouidah ou une autre ville du Bénin, tu peux faire une demande via ton dashboard partenaire. L'admin examine ta demande, tu paies les frais, et ton lieu est ajouté à MOMENT.",
+  },
+  {
+    q: "Quelles villes sont couvertes ?",
+    a: "MOMENT couvre actuellement 6 villes au Bénin : Cotonou (21 lieux), Porto-Novo (10 lieux), Ouidah (5 lieux), Grand-Popo (6 lieux), Abomey (6 lieux) et Parakou (9 lieux). De nouvelles villes arrivent bientôt.",
+  },
+];
+
+function FAQSection() {
+  const [openIdx, setOpenIdx] = useState<number | null>(null);
+
+  return (
+    <section className="px-5 py-24">
+      <div className="mx-auto max-w-3xl">
+        <p className="label-mono">Questions fréquentes</p>
+        <h2 className="text-display mt-5 text-4xl uppercase md:text-5xl">
+          Besoin d'aide ?
+        </h2>
+
+        <div className="mt-12 space-y-3">
+          {FAQ_ITEMS.map((item, i) => (
+            <div
+              key={i}
+              className="surface-panel overflow-hidden"
+            >
+              <button
+                onClick={() => setOpenIdx(openIdx === i ? null : i)}
+                className="flex w-full items-center justify-between p-5 text-left"
+              >
+                <span className="font-semibold text-base pr-4">{item.q}</span>
+                {openIdx === i ? (
+                  <ChevronUp className="h-5 w-5 shrink-0 text-primary" />
+                ) : (
+                  <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
+                )}
+              </button>
+              {openIdx === i && (
+                <div className="px-5 pb-5 animate-rise">
+                  <div className="h-px bg-border mb-4" />
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {item.a}
+                  </p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function Landing() {
   const { user, isAuthenticated, isAdmin, isPartner } = useAuth();
@@ -45,8 +125,9 @@ function Landing() {
       if (isAdmin) {
         navigate({ to: "/admin", replace: true });
       } else if (isPartner) {
-        navigate({ to: "/partner", replace: true });        } else {
-          navigate({ to: "/home", replace: true });
+        navigate({ to: "/partner", replace: true });
+      } else {
+        navigate({ to: "/home", replace: true });
       }
     }
   }, [isAuthenticated, isAdmin, isPartner, navigate]);
@@ -60,7 +141,9 @@ function Landing() {
     <div className="grain min-h-screen">
       <SiteNav />
 
-      {/* HERO */}
+      {/* ═══════════════════════════════════════════
+         HERO
+         ═══════════════════════════════════════════ */}
       <section className="relative overflow-hidden px-5 pb-24 pt-16 md:pt-24">
         <div className="pattern-adinkra pointer-events-none fixed inset-0" />
         <div className="ember-glow pointer-events-none absolute -top-40 left-1/2 size-[900px] -translate-x-1/2" />
@@ -123,14 +206,16 @@ function Landing() {
         </div>
       </section>
 
-      {/* ROLL */}
+      {/* ═══════════════════════════════════════════
+         ROLL — L'interaction du dé
+         ═══════════════════════════════════════════ */}
       <section className="relative border-y border-border bg-surface/40 px-5 py-24">
         <div className="mx-auto flex max-w-5xl flex-col items-center gap-10 text-center">
           <p className="label-mono">Interaction signature</p>
           <h2 className="text-display text-5xl uppercase md:text-7xl">
-            Don't plan it.
+            Ne planifie pas.
             <br />
-            <span className="text-primary">Roll it.</span>
+            <span className="text-primary">Lance-le.</span>
           </h2>
           <p className="max-w-xl text-muted-foreground">
             Le dé choisit la direction de ta soirée. Le moteur, lui, choisit uniquement dans ce
@@ -144,7 +229,7 @@ function Landing() {
               ["1", "Chill", Umbrella],
               ["2", "Food", Utensils],
               ["3", "Fun", Gamepad2],
-              ["4", "Entertainment", Film],
+              ["4", "Divertissement", Film],
               ["5", "Night", Mic],
               ["6", "Surprise", Sparkles],
             ].map(([n, l, Icon]) => (
@@ -160,7 +245,9 @@ function Landing() {
         </div>
       </section>
 
-      {/* FEATURES */}
+      {/* ═══════════════════════════════════════════
+         FEATURES — Pourquoi MOMENT
+         ═══════════════════════════════════════════ */}
       <section className="px-5 py-24">
         <div className="mx-auto max-w-6xl">
           <p className="label-mono">Pourquoi MOMENT</p>
@@ -173,26 +260,28 @@ function Landing() {
               {
                 icon: Zap,
                 title: "Instantané",
-                desc: "Pas de planification. Tu donnes le contexte, on te donne le parcours."
+                desc: "Pas de planification. Tu donnes le contexte, on te donne le parcours.",
               },
               {
                 icon: Target,
                 title: "Précis",
-                desc: "Horaires réels, disponibilité vérifiée, budget respecté."
+                desc: "Horaires réels, disponibilité vérifiée, budget respecté.",
               },
               {
                 icon: Compass,
                 title: "Local",
-                desc: "57 lieux à Cotonou, Porto-Novo, Ouidah et plus."
+                desc: "57 lieux à Cotonou, Porto-Novo, Ouidah et plus.",
               },
               {
                 icon: Shield,
                 title: "Sécurisé",
-                desc: "Lieux vérifiés, avis authentiques, support 24/7."
-              }
+                desc: "Lieux vérifiés, avis authentiques, support 24/7.",
+              },
             ].map((feature, i) => (
-              <div key={i} className="surface-panel p-6">
-                <feature.icon className="h-8 w-8 text-primary mb-4" />
+              <div key={i} className="surface-panel p-6 hover-lift">
+                <div className="mb-4 inline-flex p-3 rounded-xl bg-primary/10">
+                  <feature.icon className="h-6 w-6 text-primary" />
+                </div>
                 <h3 className="text-xl font-semibold">{feature.title}</h3>
                 <p className="mt-2 text-sm text-muted-foreground">{feature.desc}</p>
               </div>
@@ -201,7 +290,9 @@ function Landing() {
         </div>
       </section>
 
-      {/* CITIES */}
+      {/* ═══════════════════════════════════════════
+         CITIES — Nos villes
+         ═══════════════════════════════════════════ */}
       <section className="relative border-y border-border bg-surface/40 px-5 py-24">
         <div className="mx-auto max-w-6xl">
           <p className="label-mono">Nos villes</p>
@@ -216,7 +307,7 @@ function Landing() {
               { city: "Ouidah", count: 5, desc: "Route des Esclaves, culture vodoun" },
               { city: "Grand-Popo", count: 6, desc: "Plages, écotourisme, fleuve Mono" },
               { city: "Abomey", count: 6, desc: "Palais royaux, UNESCO, histoire" },
-              { city: "Parakou", count: 9, desc: "Culture du Borgou, marché Arzèkè" }
+              { city: "Parakou", count: 9, desc: "Culture du Borgou, marché Arzèkè" },
             ].map((city) => (
               <Link
                 key={city.city}
@@ -239,7 +330,9 @@ function Landing() {
         </div>
       </section>
 
-      {/* HOW */}
+      {/* ═══════════════════════════════════════════
+         HOW IT WORKS
+         ═══════════════════════════════════════════ */}
       <section className="px-5 py-24">
         <div className="mx-auto max-w-6xl">
           <p className="label-mono">Comment ça marche</p>
@@ -259,7 +352,7 @@ function Landing() {
                 n: "02",
                 t: "Tu lances le dé",
                 d: "Le dé décide de la direction. Le moteur filtre les possibilités réelles.",
-                img: gamingCard,
+                img: undefined,
               },
               {
                 n: "03",
@@ -268,15 +361,24 @@ function Landing() {
                 img: beach,
               },
             ].map((c) => (
-              <article key={c.n} className="hover-lift surface-panel overflow-hidden">
-                <img
-                  src={c.img}
-                  loading="lazy"
-                  width={1200}
-                  height={800}
-                  alt={c.t}
-                  className="h-48 w-full object-cover opacity-80"
-                />
+              <article
+                key={c.n}
+                className="hover-lift surface-panel overflow-hidden"
+              >
+                {c.img ? (
+                  <img
+                    src={c.img}
+                    loading="lazy"
+                    width={1200}
+                    height={800}
+                    alt={c.t}
+                    className="h-48 w-full object-cover opacity-80"
+                  />
+                ) : (
+                  <div className="flex h-48 w-full items-center justify-center bg-primary/10">
+                    <Dice size={100} value={1} spinning={false} />
+                  </div>
+                )}
                 <div className="p-6">
                   <p className="label-mono">{c.n}</p>
                   <h3 className="mt-3 text-2xl">{c.t}</h3>
@@ -288,7 +390,9 @@ function Landing() {
         </div>
       </section>
 
-      {/* EXPERIENCES */}
+      {/* ═══════════════════════════════════════════
+         EXPERIENCES
+         ═══════════════════════════════════════════ */}
       <section className="relative border-y border-border bg-surface/40 px-5 py-24">
         <div className="mx-auto max-w-6xl">
           <p className="label-mono">Expériences</p>
@@ -303,10 +407,12 @@ function Landing() {
               { icon: Camera, title: "Culture", desc: "Musées, sites historiques, patrimoine UNESCO" },
               { icon: Plane, title: "Écotourisme", desc: "Grand-Popo, mangroves, fleuve Mono, nature" },
               { icon: Calendar, title: "Événements", desc: "Vodun Days, festivals, programmation culturelle" },
-              { icon: Heart, title: "Gastronomie", desc: "Restaurants locaux, cuisine béninoise, street food" }
+              { icon: Heart, title: "Gastronomie", desc: "Restaurants locaux, cuisine béninoise, street food" },
             ].map((exp, i) => (
-              <div key={i} className="surface-panel p-6">
-                <exp.icon className="h-8 w-8 text-primary mb-4" />
+              <div key={i} className="surface-panel p-6 hover-lift">
+                <div className="mb-4 inline-flex p-3 rounded-xl bg-primary/10">
+                  <exp.icon className="h-6 w-6 text-primary" />
+                </div>
                 <h3 className="text-xl font-semibold">{exp.title}</h3>
                 <p className="mt-2 text-sm text-muted-foreground">{exp.desc}</p>
               </div>
@@ -315,7 +421,9 @@ function Landing() {
         </div>
       </section>
 
-      {/* TESTIMONIALS */}
+      {/* ═══════════════════════════════════════════
+         TESTIMONIALS
+         ═══════════════════════════════════════════ */}
       <section className="px-5 py-24">
         <div className="mx-auto max-w-6xl">
           <p className="label-mono">Témoignages</p>
@@ -325,14 +433,29 @@ function Landing() {
 
           <div className="mt-14 grid gap-6 md:grid-cols-3">
             {[
-              { name: "Marc K.", role: "Cotonou", text: "Fini les heures à chercher où sortir. MOMENT m'a trouvé un rooftop parfait pour mon anniversaire." },
-              { name: "Sarah A.", role: "Porto-Novo", text: "J'ai découvert des endroits incroyables dans ma ville que je ne connaissais même pas." },
-              { name: "Jean-Paul M.", role: "Ouidah", text: "Le dé a choisi la plage, et c'était exactement ce qu'il me fallait pour me détendre." }
+              {
+                name: "Marc K.",
+                role: "Cotonou",
+                text: "Fini les heures à chercher où sortir. MOMENT m'a trouvé un rooftop parfait pour mon anniversaire.",
+              },
+              {
+                name: "Sarah A.",
+                role: "Porto-Novo",
+                text: "J'ai découvert des endroits incroyables dans ma ville que je ne connaissais même pas.",
+              },
+              {
+                name: "Jean-Paul M.",
+                role: "Ouidah",
+                text: "Le dé a choisi la plage, et c'était exactement ce qu'il me fallait pour me détendre.",
+              },
             ].map((testimonial, i) => (
-              <div key={i} className="surface-panel p-6">
+              <div key={i} className="surface-panel p-6 hover-lift">
                 <div className="flex gap-1 mb-4">
-                  {[1, 2, 3, 4, 5].map(star => (
-                    <Star key={star} className="h-4 w-4 fill-primary text-primary" />
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      className="h-4 w-4 fill-primary text-primary"
+                    />
                   ))}
                 </div>
                 <p className="text-sm mb-4">"{testimonial.text}"</p>
@@ -349,7 +472,14 @@ function Landing() {
       {/* REVIEWS SLIDER */}
       <ReviewsSlider />
 
-      {/* CTA */}
+      {/* ═══════════════════════════════════════════
+         FAQ
+         ═══════════════════════════════════════════ */}
+      <FAQSection />
+
+      {/* ═══════════════════════════════════════════
+         CTA
+         ═══════════════════════════════════════════ */}
       <section className="relative overflow-hidden px-5 pb-28">
         <div className="relative mx-auto max-w-6xl overflow-hidden rounded-3xl border border-border">
           <img
@@ -361,7 +491,9 @@ function Landing() {
             className="h-[420px] w-full object-cover opacity-40"
           />
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-background/50 px-6 text-center">
-            <h2 className="text-display text-4xl uppercase md:text-6xl">Lance ton moment</h2>
+            <h2 className="text-display text-4xl uppercase md:text-6xl">
+              Lance ton moment
+            </h2>
             <p className="max-w-md text-muted-foreground">
               4 personnes, 40 000 FCFA, ce soir. On s'occupe du reste.
             </p>
@@ -370,13 +502,15 @@ function Landing() {
               className="inline-flex items-center gap-3 rounded-full bg-primary px-8 py-4 text-sm font-bold uppercase tracking-[0.2em] text-primary-foreground"
             >
               <Sparkles className="h-5 w-5" />
-              Roll your moment
+              Lance ton moment
             </Link>
           </div>
         </div>
       </section>
 
-      {/* STATS */}
+      {/* ═══════════════════════════════════════════
+         STATS
+         ═══════════════════════════════════════════ */}
       <section className="border-y border-border bg-surface/40 px-5 py-24">
         <div className="mx-auto max-w-6xl">
           <div className="grid gap-8 md:grid-cols-4 text-center">
@@ -403,11 +537,9 @@ function Landing() {
       <footer className="border-t border-border px-5 py-10">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 text-xs uppercase tracking-[0.3em] text-muted-foreground">
           <span>MOMENT · Cotonou</span>
-          <span>Démo front · données de démonstration</span>
+          <span>Application de démonstration · Données de test</span>
         </div>
       </footer>
     </div>
   );
 }
-
-import gamingCard from "@/assets/gaming.jpg";
