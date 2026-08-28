@@ -35,28 +35,45 @@ export function GlobalCallListener() {
   useEffect(() => {
     if (!user) return;
     const token = localStorage.getItem("token") || "";
+    console.log("📞 Connecting socket with token:", token ? "present" : "missing");
+    console.log("📞 User ID:", user.id);
     const socket = io(import.meta.env["VITE_API_URL"] || "http://localhost:5200", {
       auth: { token },
       transports: ["websocket", "polling"],
     });
     socketRef.current = socket;
 
-    socket.on("connect", () => console.log("📞 Global call socket connected:", socket.id));
+    socket.on("connect", () => {
+      console.log("📞 Global call socket connected:", socket.id);
+      console.log("📞 Socket userId:", (socket as any).userId);
+    });
+
+    socket.on("connect_error", (error) => {
+      console.error("📞 Socket connection error:", error);
+    });
 
     socket.on("call-init", (data: any) => {
       console.log("📞📞📞 INCOMING CALL from:", data.from);
+      console.log("📞 Current state - incomingCall:", !!incomingCallRef.current, "callActive:", callActive);
       if (!incomingCallRef.current && !callActive) {
         setIncomingCall({ offer: data.offer, from: data.from });
+      } else {
+        console.log("📞 Call ignored - already in call or incoming call");
       }
     });
 
     socket.on("call-ended", () => {
+      console.log("📞 Call ended event received");
       setIncomingCall(null);
       setCallActive(false);
       setCallPeer(null);
     });
 
-    return () => { socket.disconnect(); socketRef.current = null; };
+    return () => { 
+      console.log("📞 Disconnecting socket");
+      socket.disconnect(); 
+      socketRef.current = null; 
+    };
   }, [user, callActive]);
 
   // Outgoing call trigger from chat page
