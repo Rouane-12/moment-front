@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { ROLL_THEMES } from "@/lib/moment-engine";
 
 /* ── Pip layout: which grid positions are filled for each face value ── */
-const G = 0.23; // grid spacing
+const G = 0.26; // grid spacing (bigger pips)
 const PIP_MAP: Record<number, [number, number][]> = {
   1: [[0, 0]],
   2: [[-G, G], [G, -G]],
@@ -16,7 +16,7 @@ const PIP_MAP: Record<number, [number, number][]> = {
 };
 
 /* ── Face configs: position + rotation on the cube for each pip face ── */
-const H = 0.905; // half-size + tiny offset so pips sit on surface
+const H = 0.76; // smaller dice (was 0.905)
 const FACE_CONFIGS = [
   { value: 1, pos: [0, 0, H] as [number, number, number], rot: [0, 0, 0] as [number, number, number] },
   { value: 2, pos: [H, 0, 0] as [number, number, number], rot: [0, Math.PI / 2, 0] as [number, number, number] },
@@ -37,13 +37,13 @@ const FACE_UP: Record<number, [number, number, number]> = {
 };
 
 /* ────────────────────────────────────────────────
-   Pip — a small dark sphere on a dice face
+   Pip — a dark sphere on a dice face
    ──────────────────────────────────────────────── */
 function Pip({ x, y }: { x: number; y: number }) {
   return (
     <mesh position={[x, y, 0.025]} castShadow>
-      <sphereGeometry args={[0.065, 12, 12]} />
-      <meshStandardMaterial color="#111111" roughness={0.45} metalness={0.15} />
+      <sphereGeometry args={[0.08, 16, 16]} />
+      <meshStandardMaterial color="#1a1008" roughness={0.4} metalness={0.1} />
     </mesh>
   );
 }
@@ -73,12 +73,10 @@ function FacePips({
 /* ────────────────────────────────────────────────
    Dice — the 3D dice mesh with physics animation
    ──────────────────────────────────────────────── */
-
-// Animation phases
-const SPIN_DUR = 2.2;   // seconds of spinning
-const FALL_DUR = 0.6;   // seconds to fall
-const BOUNCE_DUR = 0.8;  // seconds of bouncing
-const SETTLE_DUR = 0.9;  // seconds of smooth settle
+const SPIN_DUR = 2.2;
+const FALL_DUR = 0.6;
+const BOUNCE_DUR = 0.8;
+const SETTLE_DUR = 0.9;
 
 function Dice({
   targetValue,
@@ -95,6 +93,9 @@ function Dice({
   const landedRef = useRef(false);
   const prevSpinning = useRef(false);
   const startQuat = useRef(new THREE.Quaternion());
+  const onLandedRef = useRef(onLanded);
+  onLandedRef.current = onLanded;
+
   const targetQuat = useMemo(() => {
     const e = FACE_UP[targetValue] ?? [0, 0, 0];
     return new THREE.Quaternion().setFromEuler(new THREE.Euler(e[0], e[1], e[2]));
@@ -105,13 +106,11 @@ function Dice({
     if (spinning && !prevSpinning.current) {
       timeRef.current = 0;
       landedRef.current = false;
-      // Random angular velocity
       angVel.current.set(
         12 + Math.random() * 8,
         10 + Math.random() * 7,
         8 + Math.random() * 6,
       );
-      // Random initial rotation so it looks natural
       if (groupRef.current) {
         groupRef.current.rotation.set(
           Math.random() * Math.PI * 2,
@@ -129,10 +128,9 @@ function Dice({
     const g = groupRef.current;
     if (!g) return;
 
-    const dt = Math.min(delta, 0.05); // cap delta
-    const wasSpinning = prevSpinning.current || spinning;
+    const dt = Math.min(delta, 0.05);
 
-    if (!spinning && landedRef.current) return; // done
+    if (!spinning && landedRef.current) return;
 
     if (spinning) {
       timeRef.current += dt;
@@ -141,93 +139,74 @@ function Dice({
     const t = timeRef.current;
 
     if (t < SPIN_DUR) {
-      /* ── Phase 1: SPIN ── */
       const progress = t / SPIN_DUR;
-      const speed = 1 - progress * 0.65; // decelerate to 35%
-
+      const speed = 1 - progress * 0.65;
       g.rotation.x += angVel.current.x * dt * speed;
       g.rotation.y += angVel.current.y * dt * speed;
       g.rotation.z += angVel.current.z * dt * speed;
-
-      // Bob up and down
       g.position.y = 0.9 + Math.sin(t * 7) * 0.18;
     } else if (t < SPIN_DUR + FALL_DUR) {
-      /* ── Phase 2: FALL ── */
       const ft = (t - SPIN_DUR) / FALL_DUR;
-      const gravity = ft * ft; // ease-in quad
+      const gravity = ft * ft;
       g.position.y = 0.9 * (1 - gravity);
-
-      // Slowing rotation
       const speed = 0.25 * (1 - ft);
       g.rotation.x += angVel.current.x * dt * speed;
       g.rotation.y += angVel.current.y * dt * speed;
       g.rotation.z += angVel.current.z * dt * speed;
-
-      if (ft >= 1) {
-        g.position.y = 0;
-      }
+      if (ft >= 1) g.position.y = 0;
     } else if (t < SPIN_DUR + FALL_DUR + BOUNCE_DUR) {
-      /* ── Phase 3: BOUNCE ── */
       const bt = t - SPIN_DUR - FALL_DUR;
-      // Damped bounce: y = A * e^(-d*t) * |cos(f*t)|
       const A = 0.35;
       const d = 4.5;
       const f = 12;
       g.position.y = Math.max(0, A * Math.exp(-d * bt) * Math.abs(Math.cos(f * bt)));
-
-      // Very slow rotation
       const speed = 0.08;
       g.rotation.x += angVel.current.x * dt * speed;
       g.rotation.y += angVel.current.y * dt * speed;
-
-      // Capture quaternion at start of settle
       if (bt > BOUNCE_DUR * 0.5) {
         startQuat.current.copy(g.quaternion);
       }
     } else {
-      /* ── Phase 4: SETTLE — quaternion slerp to target ── */
       const st = t - SPIN_DUR - FALL_DUR - BOUNCE_DUR;
       const progress = Math.min(1, st / SETTLE_DUR);
-      // Cubic ease-out
       const ease = 1 - Math.pow(1 - progress, 3);
-
       g.quaternion.copy(startQuat.current).slerp(targetQuat, ease);
       g.position.y = g.position.y * (1 - ease * 0.15);
-
       if (progress >= 1 && !landedRef.current) {
         landedRef.current = true;
         g.quaternion.copy(targetQuat);
         g.position.y = 0;
-        // Snap Euler for clean state
         const eul = new THREE.Euler().setFromQuaternion(targetQuat);
         g.rotation.copy(eul);
-        onLanded();
+        onLandedRef.current();
       }
     }
   });
 
+  const DICE_SIZE = 1.48; // smaller dice
+
   return (
     <group ref={groupRef} position={[0, 0, 0]}>
-      {/* Dice body — slightly rounded box */}
+      {/* Dice body — warm cream/orange tint */}
       <mesh castShadow receiveShadow>
-        <boxGeometry args={[1.78, 1.78, 1.78, 4, 4, 4]} />
+        <boxGeometry args={[DICE_SIZE, DICE_SIZE, DICE_SIZE, 6, 6, 6]} />
         <meshPhysicalMaterial
-          color="#f0ebe0"
-          roughness={0.22}
-          metalness={0.04}
-          clearcoat={0.95}
-          clearcoatRoughness={0.12}
-          envMapIntensity={0.7}
+          color="#f5e6c8"
+          roughness={0.2}
+          metalness={0.03}
+          clearcoat={1}
+          clearcoatRoughness={0.1}
+          envMapIntensity={0.8}
         />
       </mesh>
-      {/* Slightly larger transparent shell for "glass" edge effect */}
+      {/* Edge highlight shell */}
       <mesh>
-        <boxGeometry args={[1.82, 1.82, 1.82]} />
+        <boxGeometry args={[DICE_SIZE + 0.04, DICE_SIZE + 0.04, DICE_SIZE + 0.04]} />
         <meshPhysicalMaterial
-          color="#fff8f0"
+          color="#fff3e0"
           transparent
-          opacity={0.06}
-          roughness={0.1}
+          opacity={0.05}
+          roughness={0.05}
           metalness={0}
         />
       </mesh>
@@ -240,7 +219,7 @@ function Dice({
 }
 
 /* ────────────────────────────────────────────────
-   Scene — lights, dice, shadow
+   Scene — warm orange lighting
    ──────────────────────────────────────────────── */
 function Scene({
   targetValue,
@@ -253,40 +232,34 @@ function Scene({
 }) {
   return (
     <>
-      {/* Lighting */}
-      <ambientLight intensity={0.45} />
+      <ambientLight intensity={0.5} color="#fff5e6" />
       <directionalLight
         position={[4, 7, 5]}
-        intensity={1.6}
+        intensity={1.8}
+        color="#fff0d4"
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
         shadow-bias={-0.001}
       />
-      <directionalLight position={[-4, 3, -3]} intensity={0.4} color="#6b9bd2" />
-      <pointLight position={[0, -2, 3]} intensity={0.25} color="#ffd700" />
-      <pointLight position={[2, 4, -2]} intensity={0.2} color="#ff6b6b" />
-      {/* Dice */}
+      <directionalLight position={[-3, 3, -3]} intensity={0.3} color="#ff9500" />
+      <pointLight position={[0, -2, 3]} intensity={0.3} color="#F5A623" />
+      <pointLight position={[2, 4, -2]} intensity={0.15} color="#ff6b00" />
       <Dice targetValue={targetValue} spinning={spinning} onLanded={onLanded} />
-      {/* Ground shadow */}
       <ContactShadows
-        position={[0, -0.92, 0]}
-        opacity={0.45}
-        scale={6}
+        position={[0, -0.78, 0]}
+        opacity={0.5}
+        scale={5}
         blur={2.5}
         far={4}
+        color="#1a0a00"
       />
-      {/* Subtle ground plane */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.93, 0]} receiveShadow>
-        <planeGeometry args={[20, 20]} />
-        <meshStandardMaterial color="#1a1a2e" transparent opacity={0.0} />
-      </mesh>
     </>
   );
 }
 
 /* ────────────────────────────────────────────────
-   Scan lines shown during the roll
+   Scan lines
    ──────────────────────────────────────────────── */
 const SCAN_LINES = [
   "47 lieux analysés",
@@ -297,7 +270,7 @@ const SCAN_LINES = [
 ];
 
 /* ────────────────────────────────────────────────
-   DiceRollOverlay3D — full-screen overlay with 3D dice
+   DiceRollOverlay3D — full-screen overlay
    ──────────────────────────────────────────────── */
 export function DiceRollOverlay3D({
   open,
@@ -311,6 +284,9 @@ export function DiceRollOverlay3D({
   const [lines, setLines] = useState(0);
   const [landed, setLanded] = useState(false);
   const resultRef = useRef(6);
+  // ✅ FIX: stable ref for onSettled to avoid stale closure cancelling setTimeout
+  const onSettledRef = useRef(onSettled);
+  onSettledRef.current = onSettled;
 
   useEffect(() => {
     if (!open) {
@@ -323,7 +299,6 @@ export function DiceRollOverlay3D({
     const result = 1 + Math.floor(Math.random() * 6);
     resultRef.current = result;
 
-    // Scan lines animation
     const scan = setInterval(() => {
       setLines((l) => Math.min(SCAN_LINES.length, l + 1));
     }, 450);
@@ -337,52 +312,51 @@ export function DiceRollOverlay3D({
     setLanded(true);
   }, []);
 
-  // When landed is true, transition to settled phase
+  // ✅ FIX: onSettledRef eliminates stale closure — timer never gets cancelled
   useEffect(() => {
     if (!landed || phase !== "spin") return;
     setValue(resultRef.current);
     setPhase("settled");
 
-    // After showing result, call onSettled
     const timer = setTimeout(() => {
-      onSettled(resultRef.current);
+      onSettledRef.current(resultRef.current);
     }, 2800);
 
     return () => clearTimeout(timer);
-  }, [landed, phase, onSettled]);
+  }, [landed, phase]);
 
   if (!open) return null;
   const theme = ROLL_THEMES[value] ?? ROLL_THEMES[1]!;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-br from-[#0a0a1a] via-[#1a103a] to-[#0a0a1a]">
-      {/* Subtle pattern overlay */}
-      <div className="pointer-events-none absolute inset-0 opacity-[0.03]"
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-gradient-to-b from-[#1a0e04] via-[#120a02] to-[#0a0600]">
+      {/* ── Adinkra pattern background ── */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.06]"
         style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.3) 1px, transparent 0)`,
-          backgroundSize: '32px 32px',
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23F5A623' stroke-width='0.5'%3E%3Cpath d='M30 5 L30 55 M5 30 L55 30'/%3E%3Ccircle cx='30' cy='30' r='12'/%3E%3Ccircle cx='30' cy='30' r='6'/%3E%3Cpath d='M18 18 L42 42 M42 18 L18 42'/%3E%3C/g%3E%3C/svg%3E")`,
+          backgroundSize: '60px 60px',
         }}
       />
 
-      {/* Ambient glow */}
+      {/* ── Warm ambient glow ── */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-primary/10 blur-[120px]" />
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-[#F5A623]/8 blur-[100px]" />
       </div>
 
-      <div className="relative flex flex-col items-center gap-8 px-6 text-center">
-        <p className="label-mono text-sm text-white/60 tracking-[0.3em] uppercase">
+      {/* ── Main content ── */}
+      <div className="relative flex flex-col items-center gap-6 px-6 py-16 md:py-20 text-center w-full max-w-lg">
+        <p className="label-mono text-xs text-[#F5A623]/70 tracking-[0.3em] uppercase">
           Le dé décide de la direction
         </p>
 
-        {/* 3D Dice Canvas */}
-        <div className="relative w-[320px] h-[320px] md:w-[380px] md:h-[380px]">
-          {/* Pulse ring */}
+        {/* ── 3D Dice Canvas ── */}
+        <div className="relative w-[240px] h-[240px] md:w-[280px] md:h-[280px]">
           {phase === "spin" && (
-            <span className="animate-pulse-ring absolute inset-4 rounded-full border-2 border-primary/30" />
+            <span className="animate-pulse-ring absolute inset-2 rounded-full border-2 border-[#F5A623]/25" />
           )}
-
           <Canvas
-            camera={{ position: [0, 1.5, 4.5], fov: 40 }}
+            camera={{ position: [0, 1.2, 4], fov: 42 }}
             shadows
             gl={{ antialias: true, alpha: true }}
             style={{ background: "transparent" }}
@@ -395,30 +369,29 @@ export function DiceRollOverlay3D({
           </Canvas>
         </div>
 
-        {/* Result */}
+        {/* ── Result ── */}
         {phase === "settled" ? (
           <div className="animate-rise space-y-3">
-            <p className="text-display text-8xl text-primary font-black">{value}</p>
-            <div className="h-px w-48 bg-gradient-to-r from-transparent via-white/30 to-transparent mx-auto" />
-            <p className="text-display text-3xl md:text-4xl uppercase tracking-wider">
+            <p className="text-display text-7xl text-[#F5A623] font-black">{value}</p>
+            <div className="h-px w-40 bg-gradient-to-r from-transparent via-[#F5A623]/40 to-transparent mx-auto" />
+            <p className="text-display text-2xl md:text-3xl uppercase tracking-wider text-white">
               <span className="mr-2">{theme.emoji}</span>
               {theme.label}
             </p>
-            <p className="text-sm text-white/50 mt-2">
+            <p className="text-sm text-white/40 mt-1">
               MOMENT compose ton parcours...
             </p>
           </div>
         ) : (
           <div className="space-y-2">
-            <p className="text-display text-2xl md:text-3xl uppercase text-white/40 tracking-widest">
+            <p className="text-display text-xl md:text-2xl uppercase text-white/30 tracking-widest">
               Ça tourne...
             </p>
-            {/* Animated dots */}
             <div className="flex justify-center gap-1.5">
               {[0, 1, 2].map((i) => (
                 <span
                   key={i}
-                  className="w-2 h-2 rounded-full bg-primary/60"
+                  className="w-1.5 h-1.5 rounded-full bg-[#F5A623]/50"
                   style={{
                     animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
                   }}
@@ -428,11 +401,11 @@ export function DiceRollOverlay3D({
           </div>
         )}
 
-        {/* Scan lines */}
-        <ul className="min-h-[120px] space-y-1.5 text-sm text-white/50">
+        {/* ── Scan lines ── */}
+        <ul className="min-h-[100px] space-y-1 text-xs text-white/40">
           {SCAN_LINES.slice(0, lines).map((l) => (
             <li key={l} className="animate-rise flex items-center gap-2">
-              <span className="text-primary text-xs">✓</span>
+              <span className="text-[#F5A623] text-xs">✓</span>
               <span>{l}</span>
             </li>
           ))}
