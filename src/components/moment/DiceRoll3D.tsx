@@ -183,7 +183,7 @@ function Dice({
     }
   });
 
-  const DICE_SIZE = 1.48;
+  const DICE_SIZE = 1.2;
 
   return (
     <group ref={groupRef} position={[0, 0, 0]}>
@@ -340,13 +340,13 @@ export function DiceRollOverlay3D({
       </div>
 
       {/* ── Main content ── */}
-      <div className="relative flex flex-col items-center gap-6 px-6 py-16 md:py-20 text-center w-full max-w-lg">
+      <div className="relative flex flex-col items-center gap-4 px-6 py-10 md:py-14 text-center w-full max-w-sm">
         <p className="label-mono text-xs text-[#F5A623]/70 tracking-[0.3em] uppercase">
           Le dé décide de la direction
         </p>
 
         {/* ── 3D Dice Canvas ── */}
-        <div className="relative w-[240px] h-[240px] md:w-[280px] md:h-[280px]">
+        <div className="relative w-[180px] h-[180px] md:w-[220px] md:h-[220px]">
           {phase === "spin" && (
             <span className="animate-pulse-ring absolute inset-2 rounded-full border-2 border-[#F5A623]/25" />
           )}

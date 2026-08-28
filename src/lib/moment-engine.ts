@@ -550,7 +550,13 @@ export function composeMoment(params: MomentParams, variant = 0): Moment {
     if (v === "culture") vibeCats.push("culture");
   }
 
+  // Merge user vibe categories into the wanted list
   const wanted = [...theme.categories];
+  for (const vc of vibeCats) {
+    if (!wanted.includes(vc)) {
+      wanted.push(vc);
+    }
+  }
   let adapted = false;
 
   const picked: Venue[] = [];

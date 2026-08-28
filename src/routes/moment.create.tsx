@@ -59,7 +59,7 @@ const TIMES = [
 
 const BUDGETS = [3000, 5000, 7500, 10000, 15000, 20000, 25000, 30000];
 
-const STEPS = ["Où", "Personnes", "Budget", "Quand", "Vibe", "Transport", "Résumé"];
+const STEPS = ["Où", "Personnes", "Budget", "Quand", "Vibe", "Transport", "Résumé", "Paiement"];
 
 /* ── Reusable chip ── */
 function Chip({
@@ -313,7 +313,7 @@ function CreateMoment() {
             ))}
           </div>
           <p className="label-mono mt-4">
-            Étape {String(step + 1).padStart(2, "0")} / 07 · {STEPS[step]}
+            Étape {String(step + 1).padStart(2, "0")} / 08 · {STEPS[step]}
           </p>
 
           {/* ── Step content ── */}
@@ -583,7 +583,7 @@ function CreateMoment() {
               </>
             )}
 
-            {/* Step 6: Summary + dice */}
+            {/* Step 6: Summary */}
             {step === 6 && (
               <div className="text-center flex flex-col items-center py-4">
                 <h1 className="text-display text-3xl md:text-5xl uppercase leading-tight">
@@ -619,26 +619,74 @@ function CreateMoment() {
                     </button>
                   </div>
                 ) : (
+                  <div className="mt-8 surface-panel p-6 max-w-md mx-auto">
+                    <p className="text-sm text-muted-foreground mb-2">Frais de service MOMENT</p>
+                    <p className="text-display text-3xl text-primary font-bold">{formatFcfa(200)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Par moment créé</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 7: Payment + Dice */}
+            {step === 7 && (
+              <div className="text-center flex flex-col items-center py-4">
+                <h1 className="text-display text-2xl md:text-3xl uppercase">
+                  Paiement & Lancement
+                </h1>
+                <p className="mt-3 text-muted-foreground text-sm">
+                  Puis lancez le dé pour générer votre moment
+                </p>
+
+                {/* Guest: direct dice */}
+                {!isAuthenticated && guestLimit && !guestLimit.allowed ? (
+                  <div className="mt-10 space-y-6">
+                    <div className="surface-panel p-6 max-w-sm mx-auto">
+                      <p className="text-2xl font-bold text-primary mb-2">0 moment restant</p>
+                      <p className="text-sm text-muted-foreground">
+                        Connectez-vous pour continuer à créer des moments !
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => navigate({ to: "/auth/register" })}
+                      className="rounded-full bg-primary px-8 py-4 text-sm font-bold uppercase tracking-[0.25em] text-primary-foreground hover:scale-105 transition-transform"
+                    >
+                      Créer un compte gratuit
+                    </button>
+                  </div>
+                ) : !isAuthenticated ? (
+                  /* Guest: direct dice */
                   <button
                     type="button"
-                    onClick={() => {
-                      if (isAuthenticated) {
-                        setShowPayment(true);
-                      } else {
-                        setRolling(true);
-                      }
-                    }}
-                    className="group mx-auto mt-8 flex flex-col items-center gap-4"
+                    onClick={() => setRolling(true)}
+                    className="group mx-auto mt-10 flex flex-col items-center gap-4"
                   >
-                    <span className="block transition-transform duration-500 group-hover:scale-110 group-hover:rotate-12">
-                      <Dice size={80} value={5} spinning={rolling} />
-                    </span>
-                    <span className="rounded-full bg-primary px-8 py-4 text-sm font-bold uppercase tracking-[0.25em] text-primary-foreground shadow-lg shadow-primary/30 group-hover:shadow-primary/50 transition-shadow">
-                      {isAuthenticated
-                        ? `Payer ${formatFcfa(200)} et lancer`
-                        : `Lancer le dé (${guestLimit?.remaining || 20} restants)`}
+                    <Dice size={72} value={5} spinning={rolling} />
+                    <span className="rounded-full bg-primary px-8 py-3 text-sm font-bold uppercase tracking-[0.25em] text-primary-foreground shadow-lg shadow-primary/30">
+                      Lancer le dé ({guestLimit?.remaining || 20} restants)
                     </span>
                   </button>
+                ) : (
+                  /* Authenticated: payment first, then dice */
+                  <div className="mt-8 w-full max-w-md mx-auto">
+                    {!showPayment && !rolling ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowPayment(true)}
+                        className="mx-auto flex flex-col items-center gap-4"
+                      >
+                        <Dice size={72} value={5} spinning={false} />
+                        <span className="rounded-full bg-primary px-8 py-3 text-sm font-bold uppercase tracking-[0.25em] text-primary-foreground shadow-lg shadow-primary/30">
+                          Payer {formatFcfa(200)} et lancer
+                        </span>
+                      </button>
+                    ) : rolling ? (
+                      <div className="flex flex-col items-center gap-4">
+                        <Dice size={72} value={5} spinning={true} />
+                        <p className="text-sm text-muted-foreground animate-pulse">Génération en cours...</p>
+                      </div>
+                    ) : null}
+                  </div>
                 )}
               </div>
             )}
@@ -654,10 +702,10 @@ function CreateMoment() {
             >
               Retour
             </button>
-            {step < 6 && (
+            {step < 7 && (
               <button
                 type="button"
-                onClick={() => setStep((s) => Math.min(6, s + 1))}
+                onClick={() => setStep((s) => Math.min(7, s + 1))}
                 className="rounded-full bg-secondary px-8 py-3 text-sm uppercase tracking-[0.2em] transition-colors hover:bg-accent"
               >
                 Continuer →
