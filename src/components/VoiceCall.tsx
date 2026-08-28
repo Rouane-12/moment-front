@@ -179,6 +179,20 @@ export function VoiceCall({
   const endCall = () => {
     const otherId = incomingFrom?._id || targetUser._id;
     socket.emit("call-end", { to: otherId });
+    // If caller ends before connection, send missed call message via API
+    if (status === "calling" && !incomingOffer) {
+      const convId = [user.id, targetUser._id].sort().join("_");
+      fetch(`${import.meta.env["VITE_API_URL"] || "http://localhost:5200"}/api/chat/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          receiverId: targetUser._id,
+          content: "📹 Appel manqué",
+          attachments: [{ type: "call", status: "missed" }],
+        }),
+      }).catch(() => {});
+    }
     cleanup();
     onEnd();
   };

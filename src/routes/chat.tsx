@@ -71,7 +71,9 @@ function ChatPage() {
 
   // === SOCKET.IO ===
   useEffect(() => {
-    const token = document.cookie.match(/token=([^;]+)/)?.[1] || "";
+    const rawCookie = document.cookie.match(/token=([^;]+)/)?.[1] || "";
+    const token = decodeURIComponent(rawCookie);
+    console.log("🔌 Socket token exists:", !!token, "length:", token.length);
     const socket = io(import.meta.env["VITE_API_URL"] || "http://localhost:5200", {
       auth: { token },
       transports: ["websocket", "polling"],
@@ -96,9 +98,17 @@ function ChatPage() {
 
     // === INCOMING CALL ===
     socket.on("call-init", (data: any) => {
-      console.log("📞 Incoming call from:", data.from);
+      console.log("📞 Incoming call from:", data.from, "offer:", !!data.offer);
       setCallUser(data.from);
       setIncomingCall({ offer: data.offer, from: data.from });
+    });
+
+    socket.on("connect", () => {
+      console.log("🔌 Socket connected, id:", socket.id);
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("🔌 Socket connection error:", err.message);
     });
 
     return () => {
@@ -123,6 +133,12 @@ function ChatPage() {
       const res = await api.chat.getMessages(convId);
       if (res.success) setMessages((res as any).messages || []);
       await api.chat.markRead(convId);
+      // Clear unread badge locally
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.conversationId === convId ? { ...c, unreadCount: 0 } : c,
+        ),
+      );
     } catch (e) { console.error(e); }
   }, []);
 
@@ -502,7 +518,7 @@ function ChatPage() {
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <button onClick={() => setCallUser(selectedConv.otherUser)}
+            <button onClick={() => { setCallUser(selectedConv.otherUser); setIncomingCall(null); }}
               className="p-2 rounded-xl bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
               title="Appel vocal">
               <Phone className="h-5 w-5" />
