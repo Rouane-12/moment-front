@@ -119,12 +119,18 @@ export function GlobalCallListener() {
   };
 
   const endCall = () => {
+    console.log("📞 GlobalCallListener endCall called:", {
+      callPeer: callPeer?._id,
+      socket: !!socketRef.current,
+      callDirection
+    });
     if (callPeer && socketRef.current) {
       socketRef.current.emit("call-end", { to: callPeer._id });
     }
     // If outgoing call ended before connection, send missed call message
     if (callDirection === "outgoing" && callPeer && user) {
       const convId = [user.id, callPeer._id].sort().join("_");
+      console.log("📞 Sending missed call message");
       fetch(`${import.meta.env["VITE_API_URL"] || "http://localhost:5200"}/api/chat/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -136,6 +142,7 @@ export function GlobalCallListener() {
         }),
       }).catch(() => {});
     }
+    console.log("📞 Resetting call state");
     setCallActive(false);
     setCallPeer(null);
     setCallDirection("outgoing");
@@ -304,8 +311,11 @@ function ActiveCallOverlay({ peer, socket, user, direction, pendingOffer, onEnd 
   useEffect(() => {
     console.log("📞 ActiveCallOverlay OUTGOING effect triggered:", {
       socket: !!socket,
+      socketId: socket?.id,
+      socketUserId: (socket as any)?.userId,
       direction,
       user: !!user,
+      userId: user?.id,
       started: startedRef.current,
       peer: peer?._id
     });
@@ -316,6 +326,11 @@ function ActiveCallOverlay({ peer, socket, user, direction, pendingOffer, onEnd 
         noUser: !user,
         alreadyStarted: startedRef.current
       });
+      return;
+    }
+    // Wait for socket authentication before starting call
+    if (!(socket as any).userId) {
+      console.log("📞 Socket not authenticated yet, waiting...");
       return;
     }
     startedRef.current = true;
@@ -330,11 +345,11 @@ function ActiveCallOverlay({ peer, socket, user, direction, pendingOffer, onEnd 
         console.log("📞 Creating offer...");
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        console.log("📞 Emitting call-init to:", peer._id);
+        console.log("📞 Emitting call-init to:", peer._id, "from:", user.id);
         socket.emit("call-init", { to: peer._id, offer, from: { _id: user.id, firstName: user.firstName, lastName: user.lastName } });
       } catch (e) { console.error("Failed to start call:", e); onEnd(); }
     })();
-  }, [socket, direction]);
+  }, [socket, direction, user]);
 
   // INCOMING — answer with pending offer
   useEffect(() => {
@@ -382,7 +397,12 @@ function ActiveCallOverlay({ peer, socket, user, direction, pendingOffer, onEnd 
     };
   }, [socket]);
 
-  const endCall = () => { socket?.emit("call-end", { to: peer._id }); cleanup(); onEnd(); };
+  const endCall = () => {
+    console.log("📞 ActiveCallOverlay endCall called, peer:", peer._id, "socket:", !!socket);
+    socket?.emit("call-end", { to: peer._id });
+    cleanup();
+    onEnd();
+  };
   const toggleMute = () => { localStreamRef.current?.getAudioTracks().forEach((t) => (t.enabled = muted)); setMuted(!muted); };
   const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
