@@ -25,6 +25,7 @@ export function GlobalCallListener() {
   const [callActive, setCallActive] = useState(false);
   const [callPeer, setCallPeer] = useState<IncomingCall["from"] | null>(null);
   const [callDirection, setCallDirection] = useState<"incoming" | "outgoing">("outgoing");
+  const [socketAuthenticated, setSocketAuthenticated] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const incomingCallRef = useRef<IncomingCall | null>(null);
 
@@ -50,10 +51,16 @@ export function GlobalCallListener() {
     socket.on("socket-authenticated", (data: any) => {
       console.log("📞 Socket authenticated with userId:", data.userId);
       (socket as any).userId = data.userId;
+      setSocketAuthenticated(true);
     });
 
     socket.on("connect_error", (error) => {
       console.error("📞 Socket connection error:", error);
+    });
+
+    socket.on("disconnect", () => {
+      console.log("📞 Socket disconnected, resetting auth state");
+      setSocketAuthenticated(false);
     });
 
     socket.on("call-init", (data: any) => {
@@ -149,7 +156,7 @@ export function GlobalCallListener() {
     setPendingOffer(null);
   };
 
-  if (callActive && callPeer) {
+  if (callActive && callPeer && socketAuthenticated) {
     return (
       <ActiveCallOverlay
         peer={callPeer}
@@ -159,6 +166,19 @@ export function GlobalCallListener() {
         pendingOffer={pendingOffer}
         onEnd={endCall}
       />
+    );
+  }
+
+  if (callActive && callPeer && !socketAuthenticated) {
+    console.log("📞 Call active but socket not authenticated yet, waiting...");
+    return (
+      <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center">
+        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center mb-6">
+          <span className="text-primary text-3xl font-bold">{callPeer.firstName[0]}{callPeer.lastName[0]}</span>
+        </div>
+        <h2 className="text-xl font-bold text-white">{callPeer.firstName} {callPeer.lastName}</h2>
+        <p className="text-sm text-muted-foreground mt-1">Connexion...</p>
+      </div>
     );
   }
 
