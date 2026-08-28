@@ -71,8 +71,7 @@ function ChatPage() {
 
   // === SOCKET.IO ===
   useEffect(() => {
-    const rawCookie = document.cookie.match(/token=([^;]+)/)?.[1] || "";
-    const token = decodeURIComponent(rawCookie);
+    const token = localStorage.getItem("token") || document.cookie.match(/token=([^;]+)/)?.[1] || "";
     console.log("🔌 Socket token exists:", !!token, "length:", token.length);
     const socket = io(import.meta.env["VITE_API_URL"] || "http://localhost:5200", {
       auth: { token },
