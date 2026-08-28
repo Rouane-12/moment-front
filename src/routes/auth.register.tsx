@@ -10,6 +10,43 @@ export const Route = createFileRoute("/auth/register")({
   component: Register,
 });
 
+const PasswordInput = ({
+  label,
+  value,
+  onChange,
+  show,
+  onToggle,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  show: boolean;
+  onToggle: () => void;
+}) => (
+  <div>
+    <label className="label-mono block mb-2">{label}</label>
+    <div className="relative">
+      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+      <input
+        type={show ? "text" : "password"}
+        required
+        minLength={6}
+        className="w-full pl-10 pr-12 py-3 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary"
+        placeholder="••••••••"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {show ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+      </button>
+    </div>
+  </div>
+);
+
 function Register() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
@@ -85,43 +122,6 @@ function Register() {
   const handleGoogleLogin = () => {
     window.location.href = `${import.meta.env["VITE_API_URL"]}/api/auth/google`;
   };
-
-  const PasswordInput = ({
-    label,
-    value,
-    onChange,
-    show,
-    onToggle,
-  }: {
-    label: string;
-    value: string;
-    onChange: (v: string) => void;
-    show: boolean;
-    onToggle: () => void;
-  }) => (
-    <div>
-      <label className="label-mono block mb-2">{label}</label>
-      <div className="relative">
-        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-        <input
-          type={show ? "text" : "password"}
-          required
-          minLength={6}
-          className="w-full pl-10 pr-12 py-3 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary"
-          placeholder="••••••••"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-        <button
-          type="button"
-          onClick={onToggle}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          {show ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-        </button>
-      </div>
-    </div>
-  );
 
   return (
     <div className="grain min-h-screen">
