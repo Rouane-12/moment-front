@@ -158,13 +158,30 @@ function MomentResult() {
       <SiteNav />
       <DiceRollOverlay
         open={rolling}
-        onSettled={(roll) =>
-          navigate({
-            to: "/moment/$id",
-            params: { id: `roll-${roll}` },
-            search: { ...search, roll, variant: (search.variant ?? 0) + 1 },
-          })
-        }
+        onSettled={async (roll) => {
+          try {
+            const response = await api.moments.generate({
+              city: moment.params.city,
+              people: moment.params.people,
+              budget: moment.params.budgetPerPerson,
+              when: moment.params.when,
+              start: moment.params.startTime,
+              vibes: (moment.params.vibes || []).join(','),
+              transport: moment.params.transport,
+              roll,
+              date: new Date().toISOString().split('T')[0],
+            });
+            if (response.success && response.moment) {
+              navigate({
+                to: "/moment/$id",
+                params: { id: response.moment.id },
+                search: { ...search, roll, variant: (search.variant ?? 0) + 1 },
+              });
+            }
+          } catch (err) {
+            console.error('Re-roll failed:', err);
+          }
+        }}
       />
 
       {/* HERO */}

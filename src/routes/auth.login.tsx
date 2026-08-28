@@ -53,12 +53,12 @@ function Login() {
   return (
     <div className="grain min-h-screen">
       <SiteNav />
-      <div className="mx-auto max-w-md px-5 py-14">
+      <div className="mx-auto max-w-md px-5 py-8 md:py-14">
         <div className="pattern-adinkra pointer-events-none fixed inset-0" />
         
         <div className="relative">
-          <h1 className="text-display text-3xl uppercase">Connexion</h1>
-          <p className="mt-4 text-muted-foreground">Connectez-vous pour créer vos moments</p>
+          <h1 className="text-display text-2xl md:text-3xl uppercase">Connexion</h1>
+          <p className="mt-4 text-sm md:text-base text-muted-foreground">Connectez-vous pour créer vos moments</p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-6">
             <div>

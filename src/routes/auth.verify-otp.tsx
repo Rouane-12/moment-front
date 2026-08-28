@@ -45,6 +45,10 @@ function VerifyOTP() {
 
       if (data.success) {
         localStorage.removeItem("pendingUserId");
+        // Store token for cross-domain requests
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+        }
         // Refresh auth state so the context knows the user is logged in
         await refreshUser();
         // Redirect based on user role
