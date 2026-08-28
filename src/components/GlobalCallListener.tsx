@@ -302,16 +302,35 @@ function ActiveCallOverlay({ peer, socket, user, direction, pendingOffer, onEnd 
 
   // OUTGOING — create offer
   useEffect(() => {
-    if (!socket || direction !== "outgoing" || !user || startedRef.current) return;
+    console.log("📞 ActiveCallOverlay OUTGOING effect triggered:", {
+      socket: !!socket,
+      direction,
+      user: !!user,
+      started: startedRef.current,
+      peer: peer?._id
+    });
+    if (!socket || direction !== "outgoing" || !user || startedRef.current) {
+      console.log("📞 OUTGOING effect early return:", {
+        noSocket: !socket,
+        wrongDirection: direction !== "outgoing",
+        noUser: !user,
+        alreadyStarted: startedRef.current
+      });
+      return;
+    }
     startedRef.current = true;
 
     (async () => {
       try {
+        console.log("📞 Getting user media...");
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         localStreamRef.current = stream;
+        console.log("📞 Setting up peer connection...");
         const pc = setupPeer(peer._id, stream);
+        console.log("📞 Creating offer...");
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
+        console.log("📞 Emitting call-init to:", peer._id);
         socket.emit("call-init", { to: peer._id, offer, from: { _id: user.id, firstName: user.firstName, lastName: user.lastName } });
       } catch (e) { console.error("Failed to start call:", e); onEnd(); }
     })();
