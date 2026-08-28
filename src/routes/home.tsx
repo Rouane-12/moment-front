@@ -5,7 +5,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { formatFcfa } from "@/lib/moment-engine";
 import beach from "@/assets/beach.jpg";
-import { GlobalCallListener } from "@/components/GlobalCallListener";
 import * as LucideIcons from "lucide-react";
 
 const {
@@ -71,7 +70,6 @@ function HomeDashboard() {
 
   return (
     <ProtectedRoute>
-      <GlobalCallListener />
       <div className="grain min-h-screen pb-24">
         <div className="mx-auto max-w-6xl py-8 md:py-12 px-4 md:px-6">
           {/* ── Header ── */}

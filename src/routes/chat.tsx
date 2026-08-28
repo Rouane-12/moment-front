@@ -6,7 +6,6 @@ import { api } from "@/lib/api";
 import { io, Socket } from "socket.io-client";
 import { QRCodeSVG } from "qrcode.react";
 import { Html5Qrcode } from "html5-qrcode";
-import { GlobalCallListener } from "@/components/GlobalCallListener";
 
 import * as LucideIcons from "lucide-react";
 
@@ -487,7 +486,6 @@ function ChatPage() {
   // ===== MESSAGE VIEW =====
   return (
     <ProtectedRoute>
-      <GlobalCallListener />
       <div className="grain min-h-screen flex flex-col">
         {/* Header */}
         <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/10 px-3 py-2 flex items-center gap-2.5">

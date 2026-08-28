@@ -119,7 +119,7 @@ export function GlobalCallListener() {
         credentials: "include",
         body: JSON.stringify({
           receiverId: callPeer._id,
-          content: "",
+          content: "Appel manqué",
           attachments: [{ type: "call", status: "missed" }],
         }),
       }).catch(() => {});
