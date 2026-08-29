@@ -16,9 +16,11 @@ const ICE_SERVERS = {
 
 // ── Module-level deduplication (survives remounts, works across socket reconnections) ──
 let lastOutgoingCallTime = 0;
-const OUTGOING_COOLDOWN = 5000; // 5s between outgoing calls
+const OUTGOING_COOLDOWN = 5000;
 let lastCallEndTime = 0;
-const CALL_END_COOLDOWN = 3000; // 3s after call ends before accepting new
+const CALL_END_COOLDOWN = 3000;
+let outgoingCallLock = false; // Prevents double emit on outgoing call
+let outgoingCallId = 0; // Unique ID for each outgoing call session
 
 /**
  * Global call system — works on ANY page.
@@ -50,8 +52,9 @@ export function GlobalCallListener() {
     const s = socketRef.current;
 
     if (!peerEndedRef.current && s?.connected && peer) {
-      s.emit("call-end", { to: peer._id });
+      s.emit("call-end", { to: peer._id, callId: outgoingCallId });
     }
+    outgoingCallLock = false; // Release outgoing lock
 
     if (dir === "outgoing" && peer && user) {
       fetch(`${import.meta.env["VITE_API_URL"] || "http://localhost:5200"}/api/chat/send`, {
@@ -139,15 +142,20 @@ export function GlobalCallListener() {
 
       // === CALL ENDED by other party ===
       socket.on("call-ended", (data: any) => {
-        // Deduplicate
-        const dedupeKey = `ended-${data?.from || "unknown"}-${Math.floor(Date.now() / 2000)}`;
+        // Deduplicate using callId from data (same for all sockets)
+        const callId = data?.callId || data?.from || "unknown";
+        const dedupeKey = `ended-${callId}`;
         if (processedCallInits.current.has(dedupeKey)) {
-          console.log("📞 SKIP — call-ended already processed");
+          console.log("📞 SKIP — call-ended already processed for:", callId);
           return;
         }
         processedCallInits.current.add(dedupeKey);
+        if (processedCallInits.current.size > 50) {
+          const arr = Array.from(processedCallInits.current);
+          processedCallInits.current = new Set(arr.slice(-50));
+        }
 
-        console.log("📞 call-ended received");
+        console.log("📞 call-ended received from:", callId);
         lastCallEndTime = Date.now();
         callEndedRef.current = true;
         peerEndedRef.current = true;
@@ -171,13 +179,19 @@ export function GlobalCallListener() {
   useEffect(() => {
     const handler = (e: CustomEvent) => {
       if (e.detail?.targetUser && socketRef.current?.connected && user && phaseRef.current === "none") {
-        // Deduplicate outgoing calls
+        // Module-level lock — prevents double emit even across remounts
+        if (outgoingCallLock) {
+          console.log("📞 SKIP — outgoing call lock active");
+          return;
+        }
         if (Date.now() - lastOutgoingCallTime < OUTGOING_COOLDOWN) {
           console.log("📞 SKIP — outgoing call cooldown");
           return;
         }
+        outgoingCallLock = true;
         lastOutgoingCallTime = Date.now();
-        console.log("📞 START OUTGOING to:", e.detail.targetUser.firstName);
+        outgoingCallId++;
+        console.log("📞 START OUTGOING to:", e.detail.targetUser.firstName, "callId:", outgoingCallId);
         callEndedRef.current = false;
         peerEndedRef.current = false;
         setRenderState({
@@ -209,7 +223,7 @@ export function GlobalCallListener() {
   const rejectCall = useCallback(() => {
     const call = renderState.incomingCall;
     if (call && socketRef.current?.connected) {
-      socketRef.current.emit("call-end", { to: call.from._id });
+      socketRef.current.emit("call-end", { to: call.from._id, callId: "reject" });
     }
     lastCallEndTime = Date.now();
     setRenderState((prev) => ({ ...prev, phase: "none", incomingCall: null }));
@@ -408,20 +422,22 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
         const pc = setupPeer(peer._id, stream);
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        console.log("📞 Emitting call-init to:", peer._id);
+        console.log("📞 Emitting call-init to:", peer._id, "callId:", outgoingCallId);
         socket.emit("call-init", {
           to: peer._id,
           offer,
           from: { _id: user.id, firstName: user.firstName, lastName: user.lastName },
+          callId: outgoingCallId,
           timestamp: Date.now(),
         });
       } catch (e) {
         console.error("📞 Failed:", e);
+        outgoingCallLock = false; // Release lock on error
         onEndRef.current();
       }
     })();
 
-    return () => { cleanup(); };
+    return () => { cleanup(); outgoingCallLock = false; };
   }, []);
 
   // INCOMING: answer — uses MODULE-LEVEL dedup
