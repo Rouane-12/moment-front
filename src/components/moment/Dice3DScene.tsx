@@ -34,9 +34,9 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
         const scene = new THREE.Scene();
 
         // Camera — positioned to see the dice in center
-        const camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
-        camera.position.set(0, 3, 5);
-        camera.lookAt(0, 0.5, 0);
+        const camera = new THREE.PerspectiveCamera(38, w / h, 0.1, 100);
+        camera.position.set(0, 3.2, 5.5);
+        camera.lookAt(0, 0.6, 0);
 
         // Renderer
         const renderer = new THREE.WebGLRenderer({
@@ -126,7 +126,7 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
         });
 
         // ── Dice mesh ──
-        const size = 0.65;
+        const size = 0.85;
         const half = size / 2;
         const diceGroup = new THREE.Group();
 
@@ -145,7 +145,7 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
 
         // Pips
         const pipColor = 0x1a1008;
-        const pipRadius = 0.06;
+        const pipRadius = 0.08;
         const pipGeom = new THREE.SphereGeometry(pipRadius, 16, 16);
         const pipMat = new THREE.MeshStandardMaterial({
           color: pipColor,
@@ -185,7 +185,7 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
           const adjUp = new THREE.Vector3()
             .crossVectors(normal, right)
             .normalize();
-          const spacing = 0.18;
+          const spacing = 0.24;
 
           (pipGrid[value] || []).forEach(([gx, gy]) => {
             const pip = new THREE.Mesh(pipGeom, pipMat);
@@ -260,16 +260,16 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
     const body = diceBodyRef.current;
     body.wakeUp();
     // Start from center, slightly above floor
-    body.position.set(0, 1.5, 0);
+    body.position.set(0, 1.2, 0);
     body.quaternion.set(
       Math.random(), Math.random(), Math.random(), 1,
     );
     body.quaternion.normalize();
     // Upward spin — stays centered, doesn't fly off
     body.velocity.set(
-      (Math.random() - 0.5) * 2,
-      10 + Math.random() * 3,
-      (Math.random() - 0.5) * 2,
+      (Math.random() - 0.5) * 1.5,
+      8 + Math.random() * 2,
+      (Math.random() - 0.5) * 1.5,
     );
     body.angularVelocity.set(
       (Math.random() - 0.5) * 20,
@@ -303,7 +303,7 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
   return (
     <div
       ref={containerRef}
-      className="w-[200px] h-[200px] md:w-[220px] md:h-[220px]"
+      className="w-[240px] h-[240px] md:w-[280px] md:h-[280px]"
       style={{ filter: "drop-shadow(0 8px 24px rgba(245,166,35,0.3))" }}
     />
   );
