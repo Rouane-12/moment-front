@@ -117,17 +117,15 @@ export function GlobalCallListener() {
           processedCallInits.current = new Set(arr.slice(-50));
         }
 
-        // Already in a call → auto-reject
-        if (phaseRef.current === "active") {
-          console.log("📞 AUTO-REJECT — already in call");
-          socket.emit("call-end", { to: data.from?._id });
+        // Already in a call or ringing → silently ignore (no reject, no noise)
+        if (phaseRef.current !== "none") {
+          console.log("📞 SILENTLY IGNORED — already", phaseRef.current);
           return;
         }
 
-        // Recently ended → cooldown
+        // Recently ended → ignore silently
         if (Date.now() - lastCallEndTime < CALL_END_COOLDOWN) {
-          console.log("📞 AUTO-REJECT — cooldown after previous call");
-          socket.emit("call-end", { to: data.from?._id });
+          console.log("📞 SILENTLY IGNORED — cooldown after previous call");
           return;
         }
 
