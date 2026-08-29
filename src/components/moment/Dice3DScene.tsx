@@ -13,6 +13,7 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
   const diceMeshRef = useRef<any>(null);
   const animFrameRef = useRef<number>(0);
   const settleCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const physicsFrozenRef = useRef(false);
   const [ready, setReady] = useState(false);
   const initializedRef = useRef(false);
 
@@ -225,7 +226,10 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
           const now = performance.now();
           const dt = Math.min((now - lastTime) / 1000, 0.1);
           lastTime = now;
-          world.step(1 / 60, dt, 3);
+          // Skip physics after snap to keep dice face stable
+          if (!physicsFrozenRef.current) {
+            world.step(1 / 60, dt, 3);
+          }
           diceGroup.position.copy(diceBody.position as any);
           diceGroup.quaternion.copy(diceBody.quaternion as any);
           renderer.render(scene, camera);
@@ -277,6 +281,9 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
       (Math.random() - 0.5) * 20,
     );
 
+    // Reset frozen state on new spin
+    physicsFrozenRef.current = false;
+
     // Detect settle
     settleCheckRef.current = setInterval(() => {
       const v = body.velocity;
@@ -286,12 +293,14 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
       if (speed < 0.2 && angSpeed < 0.2 && body.position.y < 1) {
         if (settleCheckRef.current) clearInterval(settleCheckRef.current);
         snapDice(body, targetValue);
+        physicsFrozenRef.current = true;
       }
     }, 80);
 
     const fallback = setTimeout(() => {
       if (settleCheckRef.current) clearInterval(settleCheckRef.current);
       snapDice(body, targetValue);
+      physicsFrozenRef.current = true;
     }, 2500);
 
     return () => {
@@ -313,25 +322,45 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
 // We store the CANNON module ref from the lazy import
 let _CANNON: typeof import("cannon-es") | null = null;
 
+/**
+ * Face layout on the dice mesh:
+ *   1 = +Z  (front)
+ *   2 = +X  (right)
+ *   3 = +Y  (top — default rest)
+ *   4 = -Y  (bottom)
+ *   5 = -X  (left)
+ *   6 = -Z  (back)
+ *
+ * To show value V on top, rotate the die so that face V's normal
+ * ends up pointing along +Y.
+ */
 function snapDice(body: any, value: number) {
-  const rotations: Record<number, { x: number; y: number; z: number }> = {
-    1: { x: -Math.PI / 2, y: 0, z: 0 },
-    2: { x: 0, y: 0, z: Math.PI / 2 },
-    3: { x: 0, y: 0, z: 0 },
-    4: { x: Math.PI, y: 0, z: 0 },
-    5: { x: 0, y: 0, z: -Math.PI / 2 },
-    6: { x: Math.PI / 2, y: 0, z: 0 },
+  // axis-angle rotations: rotate face normal → +Y
+  const axisAngle: Record<number, [number, number, number, number]> = {
+    1: [1, 0, 0, -Math.PI / 2],   // +Z → +Y
+    2: [0, 0, 1,  Math.PI / 2],   // +X → +Y
+    3: [0, 0, 0,  0],             // already +Y — no rotation
+    4: [1, 0, 0,  Math.PI],       // -Y → +Y
+    5: [0, 0, 1, -Math.PI / 2],   // -X → +Y
+    6: [1, 0, 0,  Math.PI / 2],   // -Z → +Y
   };
 
   body.velocity.set(0, 0, 0);
   body.angularVelocity.set(0, 0, 0);
-  // Center the dice
   body.position.set(0, 0.15, 0);
 
   if (_CANNON) {
-    const target = rotations[value] || rotations[1];
+    const [ax, ay, az, angle] = axisAngle[value] || axisAngle[1];
     const q = new _CANNON.Quaternion();
-    q.setFromEuler(target.x, target.y, target.z);
+    if (angle === 0) {
+      q.set(0, 0, 0, 1); // identity quaternion
+    } else {
+      q.setFromAxisAngle(new _CANNON.Vec3(ax, ay, az), angle);
+    }
     body.quaternion.copy(q);
+    // Freeze the body so physics won't override the snap
+    body.sleep();
+    body.mass = 0;
+    body.updateMassProperties();
   }
 }
