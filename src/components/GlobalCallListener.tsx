@@ -172,7 +172,7 @@ export function GlobalCallListener() {
   if (callActive && callPeer && !socketAuthenticated) {
     console.log("📞 Call active but socket not authenticated yet, waiting...");
     return (
-      <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center">
+      <div className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center">
         <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center mb-6">
           <span className="text-primary text-3xl font-bold">{callPeer.firstName[0]}{callPeer.lastName[0]}</span>
         </div>
@@ -246,7 +246,7 @@ function IncomingCallUI({ from, onAccept, onReject }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center">
+    <div className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center">
       <div className="relative mb-8">
         <div className="absolute -inset-8 rounded-full border-2 border-green-400/30 animate-ping" />
         <div className="absolute -inset-16 rounded-full border border-green-400/15 animate-ping" style={{ animationDelay: "0.5s" }} />
@@ -419,7 +419,13 @@ function ActiveCallOverlay({ peer, socket, user, direction, pendingOffer, onEnd 
 
   const endCall = () => {
     console.log("📞 ActiveCallOverlay endCall called, peer:", peer._id, "socket:", !!socket);
-    socket?.emit("call-end", { to: peer._id });
+    if (!socket) {
+      console.log("📞 No socket, calling onEnd directly");
+      cleanup();
+      onEnd();
+      return;
+    }
+    socket.emit("call-end", { to: peer._id });
     cleanup();
     onEnd();
   };
@@ -427,7 +433,7 @@ function ActiveCallOverlay({ peer, socket, user, direction, pendingOffer, onEnd 
   const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center">
+    <div className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center">
       <audio ref={remoteAudioRef} autoPlay playsInline />
       <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center mb-6">
         <span className="text-primary text-3xl font-bold">{peer.firstName[0]}{peer.lastName[0]}</span>
