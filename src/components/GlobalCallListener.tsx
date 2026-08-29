@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { io, Socket } from "socket.io-client";
 import { Phone, PhoneOff, PhoneIncoming } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -17,12 +16,10 @@ const ICE_SERVERS = {
 
 /**
  * Global call system — works on ANY page.
- * All state in refs to avoid stale closure bugs.
+ * Socket.io imported dynamically to avoid SSR issues.
  */
 export function GlobalCallListener() {
   const { user } = useAuth();
-
-  // ── State for rendering ──
   const [renderState, setRenderState] = useState<{
     phase: "none" | "ringing" | "active";
     incomingCall: IncomingCall | null;
@@ -30,145 +27,19 @@ export function GlobalCallListener() {
     callDirection: "incoming" | "outgoing";
   }>({ phase: "none", incomingCall: null, callPeer: null, callDirection: "outgoing" });
 
-  // ── Refs for logic (always fresh, no stale closures) ──
-  const socketRef = useRef<Socket | null>(null);
+  const socketRef = useRef<any>(null);
   const phaseRef = useRef<"none" | "ringing" | "active">("none");
   const callEndedRef = useRef(false);
+  const peerEndedRef = useRef(false);
   const lastCallEndTimeRef = useRef(0);
   const processedCallIds = useRef<Set<string>>(new Set());
   const onEndRef = useRef<() => void>(() => {});
+  const mountedRef = useRef(false);
 
-  // ── Helper: transition to a phase ──
-  const goTo = useCallback((update: Partial<typeof renderState>) => {
-    setRenderState((prev) => {
-      const next = { ...prev, ...update };
-      phaseRef.current = next.phase;
-      return next;
-    });
-  }, []);
+  // Keep onEndRef fresh
+  useEffect(() => { mountedRef.current = true; }, []);
 
-  // ── Socket — only depends on user ──
-  useEffect(() => {
-    if (!user) return;
-    const token = localStorage.getItem("token") || "";
-    if (!token) return;
-
-    const socket = io(import.meta.env["VITE_API_URL"] || "http://localhost:5200", {
-      auth: { token },
-      transports: ["websocket", "polling"],
-      reconnection: true,
-      reconnectionDelay: 1000,
-    });
-    socketRef.current = socket;
-
-    socket.on("connect", () => console.log("📞 Socket connected:", socket.id));
-    socket.on("socket-authenticated", (d: any) => {
-      (socket as any).userId = d.userId;
-      console.log("📞 Socket auth:", d.userId);
-    });
-    socket.on("disconnect", () => console.log("📞 Socket disconnected"));
-
-    // ── INCOMING CALL ──
-    socket.on("call-init", (data: any) => {
-      const callId = `${data.from?._id}-${data.offer?.sdp?.substring(0, 30) || "x"}`;
-      console.log("📞 INCOMING call-init from:", data.from?.firstName);
-
-      // Already in a call → auto-reject
-      if (phaseRef.current === "active") {
-        console.log("📞 AUTO-REJECT — already in call");
-        socket.emit("call-end", { to: data.from?._id });
-        return;
-      }
-
-      // Recently ended → cooldown
-      if (Date.now() - lastCallEndTimeRef.current < 3000) {
-        console.log("📞 AUTO-REJECT — cooldown");
-        socket.emit("call-end", { to: data.from?._id });
-        return;
-      }
-
-      // Duplicate
-      if (processedCallIds.current.has(callId)) {
-        console.log("📞 AUTO-REJECT — duplicate");
-        return;
-      }
-      processedCallIds.current.add(callId);
-      if (processedCallIds.current.size > 30) {
-        const arr = Array.from(processedCallIds.current);
-        processedCallIds.current = new Set(arr.slice(-30));
-      }
-
-      // Show ringing UI
-      setRenderState({
-        phase: "ringing",
-        incomingCall: { offer: data.offer, from: data.from },
-        callPeer: null,
-        callDirection: "outgoing",
-      });
-    });
-
-    // ── CALL ENDED by other party ──
-    socket.on("call-ended", () => {
-      console.log("📞 call-ended received");
-      lastCallEndTimeRef.current = Date.now();
-      callEndedRef.current = true;
-      // Force end call regardless of phase
-      if (onEndRef.current) onEndRef.current();
-      setRenderState({ phase: "none", incomingCall: null, callPeer: null, callDirection: "outgoing" });
-      phaseRef.current = "none";
-    });
-
-    return () => {
-      socket.off("call-init");
-      socket.off("call-ended");
-      socket.disconnect();
-      socketRef.current = null;
-    };
-  }, [user]);
-
-  // ── OUTGOING CALL TRIGGER from chat page ──
-  useEffect(() => {
-    const handler = (e: CustomEvent) => {
-      if (e.detail?.targetUser && socketRef.current?.connected && user && phaseRef.current === "none") {
-        console.log("📞 START OUTGOING to:", e.detail.targetUser.firstName);
-        callEndedRef.current = false;
-        setRenderState({
-          phase: "active",
-          incomingCall: null,
-          callPeer: e.detail.targetUser,
-          callDirection: "outgoing",
-        });
-        phaseRef.current = "active";
-      }
-    };
-    window.addEventListener("start-outgoing-call", handler as any);
-    return () => window.removeEventListener("start-outgoing-call", handler as any);
-  }, [user]);
-
-  // ── Accept incoming call ──
-  const acceptCall = useCallback((call: IncomingCall) => {
-    console.log("📞 ACCEPTING call from:", call.from.firstName);
-    callEndedRef.current = false;
-    setRenderState({
-      phase: "active",
-      incomingCall: call,
-      callPeer: call.from,
-      callDirection: "incoming",
-    });
-    phaseRef.current = "active";
-  }, []);
-
-  // ── Reject incoming call ──
-  const rejectCall = useCallback(() => {
-    const call = renderState.incomingCall;
-    if (call && socketRef.current?.connected) {
-      socketRef.current.emit("call-end", { to: call.from._id });
-    }
-    setRenderState((prev) => ({ ...prev, phase: "none", incomingCall: null }));
-    phaseRef.current = "none";
-  }, [renderState.incomingCall]);
-
-  // ── End active call (shared ref so child can call it) ──
+  // End call function — defined early so onEndRef can reference it
   const endCall = useCallback(() => {
     if (callEndedRef.current) return;
     callEndedRef.current = true;
@@ -176,12 +47,14 @@ export function GlobalCallListener() {
 
     const peer = renderState.callPeer;
     const dir = renderState.callDirection;
+    const s = socketRef.current;
 
-    if (peer && socketRef.current?.connected) {
-      socketRef.current.emit("call-end", { to: peer._id });
+    // ONLY emit call-end if I initiated the end (not if peer already ended)
+    if (!peerEndedRef.current && s?.connected && peer) {
+      s.emit("call-end", { to: peer._id });
     }
 
-    // Send missed call message for outgoing unanswered
+    // Send missed call message
     if (dir === "outgoing" && peer && user) {
       fetch(`${import.meta.env["VITE_API_URL"] || "http://localhost:5200"}/api/chat/send`, {
         method: "POST",
@@ -199,8 +72,145 @@ export function GlobalCallListener() {
     phaseRef.current = "none";
   }, [renderState.callPeer, renderState.callDirection, user]);
 
-  // Keep onEndRef fresh so the call-ended handler can always call endCall
   useEffect(() => { onEndRef.current = endCall; }, [endCall]);
+
+  // === SOCKET — only depends on user, imported dynamically ===
+  useEffect(() => {
+    if (!user) return;
+    const token = localStorage.getItem("token") || "";
+    if (!token) return;
+
+    let cancelled = false;
+
+    // Dynamic import to avoid SSR issues
+    import("socket.io-client").then(({ io }) => {
+      if (cancelled) return;
+
+      const socket = io(import.meta.env["VITE_API_URL"] || "http://localhost:5200", {
+        auth: { token },
+        transports: ["websocket", "polling"],
+        reconnection: true,
+        reconnectionDelay: 1000,
+      });
+      socketRef.current = socket;
+
+      socket.on("connect", () => console.log("📞 Socket connected:", socket.id));
+      socket.on("socket-authenticated", (d: any) => {
+        (socket as any).userId = d.userId;
+        console.log("📞 Socket auth:", d.userId);
+      });
+      socket.on("disconnect", () => console.log("📞 Socket disconnected"));
+
+      // === INCOMING CALL ===
+      socket.on("call-init", (data: any) => {
+        const callId = `${data.from?._id}-${Date.now()}`;
+        console.log("📞 INCOMING call-init from:", data.from?.firstName);
+
+        // Already in a call → auto-reject
+        if (phaseRef.current === "active") {
+          console.log("📞 AUTO-REJECT — already in call");
+          socket.emit("call-end", { to: data.from?._id });
+          return;
+        }
+
+        // Recently ended → cooldown
+        if (Date.now() - lastCallEndTimeRef.current < 3000) {
+          console.log("📞 AUTO-REJECT — cooldown");
+          socket.emit("call-end", { to: data.from?._id });
+          return;
+        }
+
+        // Duplicate
+        if (processedCallIds.current.has(callId)) {
+          console.log("📞 AUTO-REJECT — duplicate");
+          return;
+        }
+        processedCallIds.current.add(callId);
+        if (processedCallIds.current.size > 30) {
+          const arr = Array.from(processedCallIds.current);
+          processedCallIds.current = new Set(arr.slice(-30));
+        }
+
+        // Show ringing UI
+        setRenderState({
+          phase: "ringing",
+          incomingCall: { offer: data.offer, from: data.from },
+          callPeer: null,
+          callDirection: "outgoing",
+        });
+      });
+
+      // === CALL ENDED by other party ===
+      // CRITICAL: do NOT call endCall() here — it would re-emit call-end creating a loop
+      socket.on("call-ended", () => {
+        console.log("📞 call-ended received — peer ended");
+        lastCallEndTimeRef.current = Date.now();
+        callEndedRef.current = true;
+        peerEndedRef.current = true;
+
+        // Cleanup WebRTC resources directly
+        // (the ActiveCallOverlay cleanup effect handles peer/stream closure)
+
+        // Reset state — no emit
+        setRenderState({ phase: "none", incomingCall: null, callPeer: null, callDirection: "outgoing" });
+        phaseRef.current = "none";
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      if (socketRef.current) {
+        socketRef.current.removeAllListeners();
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, [user]);
+
+  // === OUTGOING CALL TRIGGER from chat page ===
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      if (e.detail?.targetUser && socketRef.current?.connected && user && phaseRef.current === "none") {
+        console.log("📞 START OUTGOING to:", e.detail.targetUser.firstName);
+        callEndedRef.current = false;
+        peerEndedRef.current = false;
+        setRenderState({
+          phase: "active",
+          incomingCall: null,
+          callPeer: e.detail.targetUser,
+          callDirection: "outgoing",
+        });
+        phaseRef.current = "active";
+      }
+    };
+    window.addEventListener("start-outgoing-call", handler as any);
+    return () => window.removeEventListener("start-outgoing-call", handler as any);
+  }, [user]);
+
+  // ── Accept incoming call ──
+  const acceptCall = useCallback((call: IncomingCall) => {
+    console.log("📞 ACCEPTING call from:", call.from.firstName);
+    callEndedRef.current = false;
+    peerEndedRef.current = false;
+    setRenderState({
+      phase: "active",
+      incomingCall: call,
+      callPeer: call.from,
+      callDirection: "incoming",
+    });
+    phaseRef.current = "active";
+  }, []);
+
+  // ── Reject incoming call ──
+  const rejectCall = useCallback(() => {
+    const call = renderState.incomingCall;
+    if (call && socketRef.current?.connected) {
+      socketRef.current.emit("call-end", { to: call.from._id });
+    }
+    lastCallEndTimeRef.current = Date.now();
+    setRenderState((prev) => ({ ...prev, phase: "none", incomingCall: null }));
+    phaseRef.current = "none";
+  }, [renderState.incomingCall]);
 
   // ── RENDER ──
   const { phase, incomingCall, callPeer, callDirection } = renderState;
@@ -208,6 +218,7 @@ export function GlobalCallListener() {
   if (phase === "active" && callPeer) {
     return (
       <ActiveCallOverlay
+        key={`call-${callPeer._id}-${phase}`}
         peer={callPeer}
         socket={socketRef.current}
         user={user}
@@ -221,6 +232,7 @@ export function GlobalCallListener() {
   if (phase === "ringing" && incomingCall) {
     return (
       <IncomingCallUI
+        key={`ring-${incomingCall.from._id}`}
         from={incomingCall.from}
         onAccept={() => acceptCall(incomingCall)}
         onReject={rejectCall}
@@ -240,34 +252,36 @@ function IncomingCallUI({ from, onAccept, onReject }: {
   onAccept: () => void;
   onReject: () => void;
 }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stoppedRef = useRef(false);
 
   useEffect(() => {
-    // Use a looping audio element for reliable stop
+    stoppedRef.current = false;
+    let ctx: AudioContext | null = null;
+
     try {
-      // Create a short ringtone using Web Audio
-      const ctx = new AudioContext();
+      ctx = new AudioContext();
+      audioCtxRef.current = ctx;
       const playTone = () => {
+        if (stoppedRef.current) return;
         try {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
+          const osc = ctx!.createOscillator();
+          const gain = ctx!.createGain();
           osc.connect(gain);
-          gain.connect(ctx.destination);
+          gain.connect(ctx!.destination);
           osc.frequency.value = 440;
           osc.type = "sine";
-          gain.gain.setValueAtTime(0.25, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-          osc.start(ctx.currentTime);
-          osc.stop(ctx.currentTime + 0.35);
+          gain.gain.setValueAtTime(0.25, ctx!.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx!.currentTime + 0.35);
+          osc.start(ctx!.currentTime);
+          osc.stop(ctx!.currentTime + 0.35);
         } catch {}
       };
       playTone();
       intervalRef.current = setInterval(playTone, 800);
-      audioRef.current = { close: () => ctx.close() } as any;
     } catch {}
 
-    // Browser notification
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
@@ -276,11 +290,13 @@ function IncomingCallUI({ from, onAccept, onReject }: {
     }
 
     return () => {
-      // CRITICAL: always stop sound on unmount
+      // CRITICAL: always stop on unmount
+      stoppedRef.current = true;
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-      try { audioRef.current?.close(); } catch {}
+      try { audioCtxRef.current?.close(); } catch {}
+      audioCtxRef.current = null;
     };
-  }, [from._id]);
+  }, []);
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center">
@@ -316,11 +332,10 @@ function IncomingCallUI({ from, onAccept, onReject }: {
 
 /* ══════════════════════════════════════
    Active Call — WebRTC + controls
-   Uses refs for ALL callbacks to avoid stale closures
    ══════════════════════════════════════ */
 function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd }: {
   peer: { _id: string; firstName: string; lastName: string };
-  socket: Socket | null;
+  socket: any;
   user: any;
   direction: "incoming" | "outgoing";
   incomingCall: IncomingCall | null;
@@ -335,16 +350,18 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedRef = useRef(false);
+  const cleanupDoneRef = useRef(false);
 
-  // ── Refs for callbacks (always fresh) ──
+  // Refs for callbacks (always fresh — never stale)
   const onEndRef = useRef(onEnd);
   onEndRef.current = onEnd;
-
   const socketRef = useRef(socket);
   socketRef.current = socket;
 
-  // ── Cleanup: close peer + stop tracks ──
+  // Cleanup: close peer + stop tracks + clear timer
   const cleanup = useCallback(() => {
+    if (cleanupDoneRef.current) return;
+    cleanupDoneRef.current = true;
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (peerRef.current) { try { peerRef.current.close(); } catch {} peerRef.current = null; }
     if (localStreamRef.current) {
@@ -353,18 +370,7 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
     }
   }, []);
 
-  // ── End call: emit + cleanup + notify parent ──
-  const endCall = useCallback(() => {
-    const s = socketRef.current;
-    const p = peer;
-    cleanup();
-    if (s?.connected && p) {
-      s.emit("call-end", { to: p._id });
-    }
-    onEndRef.current();
-  }, [cleanup, peer]);
-
-  // ── Setup peer connection ──
+  // Setup peer — uses refs so never stale
   const setupPeer = useCallback((targetId: string, stream: MediaStream) => {
     const pc = new RTCPeerConnection(ICE_SERVERS);
     peerRef.current = pc;
@@ -388,16 +394,17 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
       if (state === "connected") {
         setStatus("connected");
       }
-      if (state === "disconnected" || state === "failed" || state === "closed") {
-        console.log("📞 WebRTC failed/disconnected → ending call");
-        endCall();
+      if (state === "failed" || state === "closed") {
+        console.log("📞 WebRTC failed → ending call");
+        cleanup();
+        onEndRef.current();
       }
     };
 
     return pc;
-  }, [endCall]); // endCall uses refs → stable enough
+  }, []); // Empty deps — uses refs
 
-  // ── OUTGOING: create offer (runs ONCE) ──
+  // OUTGOING: create offer (runs ONCE per mount)
   useEffect(() => {
     if (direction !== "outgoing" || !socket || startedRef.current) return;
     if (!(socket as any).userId) return;
@@ -405,6 +412,7 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
 
     (async () => {
       try {
+        console.log("📞 Getting media for outgoing call");
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         localStreamRef.current = stream;
         const pc = setupPeer(peer._id, stream);
@@ -422,21 +430,23 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
       }
     })();
 
-    return cleanup; // Cleanup on unmount
-  }, [socket, direction]); // Minimal deps
+    return () => { cleanup(); };
+  }, []); // Empty deps — runs ONCE
 
-  // ── INCOMING: answer with offer (runs ONCE) ──
+  // INCOMING: answer with offer (runs ONCE per mount)
   useEffect(() => {
     if (direction !== "incoming" || !socket || !incomingCall || startedRef.current) return;
     startedRef.current = true;
 
     (async () => {
       try {
-        console.log("📞 Answering incoming call from:", incomingCall.from.firstName);
+        console.log("📞 Getting media for incoming call");
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         localStreamRef.current = stream;
         const pc = setupPeer(incomingCall.from._id, stream);
+        console.log("📞 Setting remote description (offer)");
         await pc.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
+        console.log("📞 Creating answer");
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         console.log("📞 Emitting call-answer to:", incomingCall.from._id);
@@ -447,15 +457,15 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
       }
     })();
 
-    return cleanup; // Cleanup on unmount
-  }, [socket, direction]); // Minimal deps
+    return () => { cleanup(); };
+  }, []); // Empty deps — runs ONCE
 
-  // ── Socket listeners for signaling (runs ONCE per socket) ──
+  // Socket listeners for signaling — runs ONCE per socket
   useEffect(() => {
     if (!socket) return;
 
     const handleAnswer = async (data: any) => {
-      console.log("📞 Received call-answer");
+      console.log("📞 Received call-answer, setting remote description");
       if (peerRef.current) {
         try {
           await peerRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
@@ -464,6 +474,8 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
         } catch (e) {
           console.error("📞 Failed to set remote description:", e);
         }
+      } else {
+        console.log("📞 WARNING: received call-answer but no peer connection!");
       }
     };
 
@@ -474,9 +486,10 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
     };
 
     const handleEnded = () => {
-      console.log("📞 call-ended in ActiveCallOverlay");
+      console.log("📞 call-ended in ActiveCallOverlay — cleaning up");
       cleanup();
-      onEndRef.current();
+      // Do NOT call onEnd here — the parent's call-ended handler already resets state
+      // Calling onEnd would re-emit call-end creating a loop
     };
 
     socket.on("call-answer", handleAnswer);
@@ -488,9 +501,9 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
       socket.off("call-ice-candidate", handleIce);
       socket.off("call-ended", handleEnded);
     };
-  }, [socket]); // Only depends on socket
+  }, [socket]); // Only socket
 
-  // ── Call timer ──
+  // Call timer
   useEffect(() => {
     if (status === "connected") {
       setDuration(0);
@@ -498,6 +511,11 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [status]);
+
+  const endCall = useCallback(() => {
+    cleanup();
+    onEndRef.current();
+  }, [cleanup]);
 
   const toggleMute = () => {
     localStreamRef.current?.getAudioTracks().forEach((t) => (t.enabled = muted));
