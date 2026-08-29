@@ -204,7 +204,7 @@ function MomentResult() {
       />
 
       {/* HERO */}
-      <section className="relative h-[52vh] min-h-80 overflow-hidden">
+      <section className="relative mx-3 mt-3 sm:mx-5 sm:mt-5 h-[40vh] sm:h-[48vh] md:h-[52vh] min-h-[300px] md:min-h-80 overflow-hidden rounded-2xl md:rounded-3xl border border-white/10">
         {hero?.image && (
           <img
             src={hero.image}
@@ -215,37 +215,37 @@ function MomentResult() {
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 mx-auto max-w-6xl px-5 pb-8">
-          <p className="label-mono flex items-center gap-2">
+        <div className="absolute inset-x-0 bottom-0 mx-auto max-w-6xl px-4 sm:px-5 pb-6 sm:pb-8">
+          <p className="label-mono flex items-center gap-2 text-xs sm:text-sm">
             {getIcon(moment.theme.icon || "") && (() => {
               const I = getIcon(moment.theme.icon || "");
-              return <I className="h-4 w-4 text-primary" />;
+              return <I className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />;
             })()}
             {moment.theme.label} · Lancer {moment.params.roll} · {moment.id}
           </p>
-          <h1 className="text-display mt-3 text-5xl uppercase md:text-7xl">
+          <h1 className="text-display mt-2 sm:mt-3 text-3xl sm:text-5xl uppercase md:text-7xl">
             {moment.title}
           </h1>
-          <div className="mt-5 flex flex-wrap items-center gap-3 text-sm">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 font-bold text-primary-foreground">
-              <CheckCircle2 className="h-4 w-4" />
+          <div className="mt-3 sm:mt-5 flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 sm:px-4 py-1.5 sm:py-2 font-bold text-primary-foreground">
+              <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               {moment.score}% pour vous
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-muted-foreground">
-              <Clock className="h-4 w-4" />
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 sm:px-4 py-1.5 sm:py-2 text-muted-foreground">
+              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               {moment.params.startTime} → {moment.steps.at(-1)?.end}
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-muted-foreground">
-              <RouteIcon className="h-4 w-4" />
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 sm:px-4 py-1.5 sm:py-2 text-muted-foreground">
+              <RouteIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               {moment.distanceKm} km
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-muted-foreground">
-              <DollarSign className="h-4 w-4" />
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 sm:px-4 py-1.5 sm:py-2 text-muted-foreground">
+              <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               {formatFcfa(moment.perPerson)} / personne
             </span>
           </div>
           {moment.adapted && (
-            <p className="mt-4 text-xs uppercase tracking-[0.25em] text-gold">
+            <p className="mt-3 sm:mt-4 text-[10px] sm:text-xs uppercase tracking-[0.25em] text-gold">
               MOMENT a légèrement adapté ton lancer
             </p>
           )}
