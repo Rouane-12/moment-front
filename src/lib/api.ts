@@ -342,6 +342,17 @@ export const api = {
 
     getAdminInfo: () =>
       request('/api/chat/admin-info'),
+
+    editMessage: (messageId: string, content: string) =>
+      request(`/api/chat/messages/${messageId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ content }),
+      }),
+
+    deleteMessage: (messageId: string) =>
+      request(`/api/chat/messages/${messageId}`, {
+        method: 'DELETE',
+      }),
   },
 
   reports: {

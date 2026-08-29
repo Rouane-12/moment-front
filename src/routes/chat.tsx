@@ -12,7 +12,7 @@ import * as LucideIcons from "lucide-react";
 const {
   MessageCircle, Send, QrCode, ArrowLeft, Check, CheckCheck, Search, X,
   Camera, Shield, Mic, Paperclip, FileText, Square, Phone, PhoneOff,
-  Play, Pause
+  Play, Pause, Trash2, Pencil, MoreVertical
 } = LucideIcons;
 
 export const Route = createFileRoute("/chat")({ ssr: false, component: ChatPage });
@@ -41,6 +41,8 @@ type Msg = {
   read: boolean;
   readAt?: string;
   attachments?: Attachment[];
+  edited?: boolean;
+  editedAt?: string;
   createdAt: string;
 };
 
@@ -59,6 +61,9 @@ function ChatPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ msgId: string; x: number; y: number } | null>(null);
+  const [editingMsg, setEditingMsg] = useState<Msg | null>(null);
+  const [editContent, setEditContent] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -92,6 +97,14 @@ function ChatPage() {
 
     socket.on("messages-read", () => {
       loadConversations();
+    });
+
+    socket.on("message-edited", (msg: Msg) => {
+      setMessages((prev) => prev.map((m) => (m._id === msg._id ? msg : m)));
+    });
+
+    socket.on("message-deleted", (data: { messageId: string; conversationId: string }) => {
+      setMessages((prev) => prev.filter((m) => m._id !== data.messageId));
     });
 
     return () => {
@@ -148,6 +161,42 @@ function ChatPage() {
     } catch (e) { console.error(e); }
     finally { setSending(false); }
   };
+
+  // === EDIT / DELETE MESSAGE ===
+  const handleEditMessage = async () => {
+    if (!editingMsg || !editContent.trim()) return;
+    try {
+      const res = await api.chat.editMessage(editingMsg._id, editContent.trim());
+      if (res.success) {
+        setMessages((prev) => prev.map((m) => (m._id === editingMsg._id ? { ...m, content: editContent.trim(), edited: true } : m)));
+      }
+    } catch (e: any) { alert(e.message || "Erreur lors de la modification"); }
+    setEditingMsg(null);
+    setEditContent("");
+  };
+
+  const handleDeleteMessage = async (msgId: string) => {
+    if (!confirm("Supprimer ce message ?")) return;
+    try {
+      await api.chat.deleteMessage(msgId);
+      setMessages((prev) => prev.filter((m) => m._id !== msgId));
+    } catch (e: any) { alert(e.message || "Erreur lors de la suppression"); }
+    setContextMenu(null);
+  };
+
+  const showContextMenuFor = (msgId: string, x: number, y: number) => {
+    setContextMenu({ msgId, x: Math.min(x, window.innerWidth - 180), y: Math.min(y, window.innerHeight - 100) });
+  };
+
+  // Close context menu on outside click
+  useEffect(() => {
+    const close = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener("click", close);
+      document.addEventListener("scroll", close, true);
+      return () => { document.removeEventListener("click", close); document.removeEventListener("scroll", close, true); };
+    }
+  }, [contextMenu]);
 
   // Compress image to max 800px width
   const compressImage = (file: File): Promise<string> => {
@@ -530,12 +579,27 @@ function ChatPage() {
                 <div className={`max-w-[82%] ${isMe ? "items-end" : "items-start"} flex flex-col`}>
                   {/* Text content — hide if message is only an attachment */}
                   {msg.content && msg.content.trim() !== " " && (!msg.attachments || msg.attachments.length === 0 || msg.content.trim().length > 2) && (
-                    <div className={`px-3 py-2 rounded-2xl ${
-                      isMe
-                        ? "bg-primary text-primary-foreground rounded-br-sm"
-                        : "bg-white/8 border border-white/5 text-foreground rounded-bl-sm"
-                    }`}>
+                    <div
+                      className={`px-3 py-2 rounded-2xl ${
+                        isMe
+                          ? "bg-primary text-primary-foreground rounded-br-sm"
+                          : "bg-white/8 border border-white/5 text-foreground rounded-bl-sm"
+                      }`}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        if (isMe) showContextMenuFor(msg._id, e.clientX, e.clientY);
+                      }}
+                      onClick={() => {
+                        if (isMe) {
+                          // Long press simulation for mobile
+                          const timer = setTimeout(() => showContextMenuFor(msg._id, window.innerWidth / 2, window.innerHeight / 2), 500);
+                          const cancel = () => { clearTimeout(timer); document.removeEventListener('touchend', cancel); };
+                          document.addEventListener('touchend', cancel, { once: true });
+                        }
+                      }}
+                    >
                       <p className="text-[13px] leading-relaxed whitespace-pre-wrap">{msg.content.trim()}</p>
+                      {msg.edited && <span className="text-[9px] opacity-50 italic">modifié</span>}
                     </div>
                   )}
 
@@ -608,6 +672,54 @@ function ChatPage() {
           })}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Context Menu */}
+        {contextMenu && (() => {
+          const msg = messages.find((m) => m._id === contextMenu.msgId);
+          if (!msg) return null;
+          return (
+            <div
+              className="fixed z-[200] bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl py-1 min-w-[160px]"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button onClick={() => {
+                setEditingMsg(msg);
+                setEditContent(msg.content);
+                setContextMenu(null);
+              }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors">
+                <Pencil className="h-4 w-4 text-blue-400" />
+                Modifier
+              </button>
+              <button onClick={() => handleDeleteMessage(msg._id)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-white/10 transition-colors">
+                <Trash2 className="h-4 w-4" />
+                Supprimer
+              </button>
+            </div>
+          );
+        })()}
+
+        {/* Edit bar */}
+        {editingMsg && (
+          <div className="sticky bottom-0 z-50 bg-blue-900/30 border-t border-blue-500/30 px-3 py-2">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] text-blue-400 font-medium">Modification du message</span>
+              <button onClick={() => { setEditingMsg(null); setEditContent(""); }} className="text-white/50 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="text" value={editContent} autoFocus
+                onChange={(e) => setEditContent(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleEditMessage(); if (e.key === "Escape") { setEditingMsg(null); setEditContent(""); } }}
+                className="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:border-blue-500 text-sm" />
+              <button onClick={handleEditMessage} disabled={!editContent.trim()}
+                className="p-2.5 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-30">
+                <Check className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Input bar */}
         <div className="sticky bottom-0 bg-background/80 backdrop-blur-xl border-t border-white/10 px-2 py-2">
