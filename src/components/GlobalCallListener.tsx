@@ -14,23 +14,33 @@ const ICE_SERVERS = {
   ],
 };
 
-// ── Module-level deduplication (survives remounts, works across socket reconnections) ──
+// ── Module-level state (survives remounts, shared across all instances) ──
 let lastOutgoingCallTime = 0;
 const OUTGOING_COOLDOWN = 5000;
 let lastCallEndTime = 0;
 const CALL_END_COOLDOWN = 3000;
-let outgoingCallLock = false; // Prevents double emit on outgoing call
-let outgoingCallId = 0; // Unique ID for each outgoing call session
+let outgoingCallLock = false;
+let outgoingCallId = 0;
+const processedCallInits = new Set<string>(); // Module-level — never resets
+
+function cleanupDedup() {
+  if (processedCallInits.size > 100) {
+    const arr = Array.from(processedCallInits);
+    const half = Math.floor(arr.length / 2);
+    for (let i = 0; i < half; i++) processedCallInits.delete(arr[i]!);
+  }
+}
 
 /**
  * Global call system — works on ANY page.
+ * Single instance guaranteed by __root.tsx.
  */
 export function GlobalCallListener() {
   const { user } = useAuth();
   const [renderState, setRenderState] = useState<{
     phase: "none" | "ringing" | "active";
     incomingCall: IncomingCall | null;
-    callPeer: IncomingCall["from"] | null;
+    callPeer: { _id: string; firstName: string; lastName: string } | null;
     callDirection: "incoming" | "outgoing";
   }>({ phase: "none", incomingCall: null, callPeer: null, callDirection: "outgoing" });
 
@@ -38,26 +48,26 @@ export function GlobalCallListener() {
   const phaseRef = useRef<"none" | "ringing" | "active">("none");
   const callEndedRef = useRef(false);
   const peerEndedRef = useRef(false);
-  const processedCallInits = useRef<Set<string>>(new Set());
   const onEndRef = useRef<() => void>(() => {});
 
-  // End call function
+  // ── endCall — all data via refs, zero stale closures ──
   const endCall = useCallback(() => {
     if (callEndedRef.current) return;
     callEndedRef.current = true;
     lastCallEndTime = Date.now();
+    outgoingCallLock = false;
 
-    const peer = renderState.callPeer;
-    const dir = renderState.callDirection;
+    const peer = onEndRef.current._peer;
+    const dir = onEndRef.current._dir;
     const s = socketRef.current;
 
     if (!peerEndedRef.current && s?.connected && peer) {
       s.emit("call-end", { to: peer._id, callId: outgoingCallId });
     }
-    outgoingCallLock = false; // Release outgoing lock
 
-    if (dir === "outgoing" && peer && user) {
-      fetch(`${import.meta.env["VITE_API_URL"] || "http://localhost:5200"}/api/chat/send`, {
+    if (dir === "outgoing" && peer) {
+      const apiBase = import.meta.env["VITE_API_URL"] || "http://localhost:5200";
+      fetch(`${apiBase}/api/chat/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -71,9 +81,14 @@ export function GlobalCallListener() {
 
     setRenderState({ phase: "none", incomingCall: null, callPeer: null, callDirection: "outgoing" });
     phaseRef.current = "none";
-  }, [renderState.callPeer, renderState.callDirection, user]);
+  }, []);
 
-  useEffect(() => { onEndRef.current = endCall; }, [endCall]);
+  // Keep onEndRef always fresh with latest peer/direction for endCall
+  useEffect(() => {
+    onEndRef.current = endCall;
+    (onEndRef.current as any)._peer = renderState.callPeer;
+    (onEndRef.current as any)._dir = renderState.callDirection;
+  }, [endCall, renderState.callPeer, renderState.callDirection]);
 
   // === SOCKET ===
   useEffect(() => {
@@ -103,21 +118,18 @@ export function GlobalCallListener() {
 
       // === INCOMING CALL ===
       socket.on("call-init", (data: any) => {
-        // Deduplicate using sender ID + timestamp (covers multiple sockets in same room)
-        const dedupeKey = `${data.from?._id}-${Math.floor((data.timestamp || Date.now()) / 2000)}`;
-        console.log("📞 INCOMING call-init dedupeKey:", dedupeKey);
+        // Use the timestamp from the SENDER (same for all sockets that receive this event)
+        const dedupeKey = `${data.from?._id}-${Math.floor((data.timestamp || 0) / 2000)}`;
+        console.log("📞 INCOMING call-init dedupeKey:", dedupeKey, "phase:", phaseRef.current);
 
-        if (processedCallInits.current.has(dedupeKey)) {
-          console.log("📞 SKIP — already processed this call-init (different socket in room)");
+        if (processedCallInits.has(dedupeKey)) {
+          console.log("📞 SKIP — already processed (different socket in room)");
           return;
         }
-        processedCallInits.current.add(dedupeKey);
-        if (processedCallInits.current.size > 50) {
-          const arr = Array.from(processedCallInits.current);
-          processedCallInits.current = new Set(arr.slice(-50));
-        }
+        processedCallInits.add(dedupeKey);
+        cleanupDedup();
 
-        // Already in a call or ringing → silently ignore (no reject, no noise)
+        // Already in a call or ringing → silently ignore
         if (phaseRef.current !== "none") {
           console.log("📞 SILENTLY IGNORED — already", phaseRef.current);
           return;
@@ -129,35 +141,33 @@ export function GlobalCallListener() {
           return;
         }
 
-        console.log("📞 ✅ NEW incoming call from:", data.from?.firstName);
+        console.log("📞 NEW incoming call from:", data.from?.firstName);
         setRenderState({
           phase: "ringing",
           incomingCall: { offer: data.offer, from: data.from },
           callPeer: null,
           callDirection: "outgoing",
         });
+        phaseRef.current = "ringing";
       });
 
       // === CALL ENDED by other party ===
       socket.on("call-ended", (data: any) => {
-        // Deduplicate using callId from data (same for all sockets)
-        const callId = data?.callId || data?.from || "unknown";
-        const dedupeKey = `ended-${callId}`;
-        if (processedCallInits.current.has(dedupeKey)) {
+        const callId = data?.callId || "unknown";
+        const dedupeKey = `ended-${callId}-${data?.from || "x"}`;
+        if (processedCallInits.has(dedupeKey)) {
           console.log("📞 SKIP — call-ended already processed for:", callId);
           return;
         }
-        processedCallInits.current.add(dedupeKey);
-        if (processedCallInits.current.size > 50) {
-          const arr = Array.from(processedCallInits.current);
-          processedCallInits.current = new Set(arr.slice(-50));
-        }
+        processedCallInits.add(dedupeKey);
+        cleanupDedup();
 
         console.log("📞 call-ended received from:", callId);
         lastCallEndTime = Date.now();
         callEndedRef.current = true;
         peerEndedRef.current = true;
 
+        // Reset state — do NOT emit call-end back (causes loops)
         setRenderState({ phase: "none", incomingCall: null, callPeer: null, callDirection: "outgoing" });
         phaseRef.current = "none";
       });
@@ -177,7 +187,6 @@ export function GlobalCallListener() {
   useEffect(() => {
     const handler = (e: CustomEvent) => {
       if (e.detail?.targetUser && socketRef.current?.connected && user && phaseRef.current === "none") {
-        // Module-level lock — prevents double emit even across remounts
         if (outgoingCallLock) {
           console.log("📞 SKIP — outgoing call lock active");
           return;
@@ -269,14 +278,17 @@ function IncomingCallUI({ from, onAccept, onReject }: {
 }) {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stoppedRef = useRef(false);
 
   useEffect(() => {
+    stoppedRef.current = false;
     let ctx: AudioContext | null = null;
 
     try {
       ctx = new AudioContext();
       audioCtxRef.current = ctx;
       const playTone = () => {
+        if (stoppedRef.current) return;
         try {
           const osc = ctx!.createOscillator();
           const gain = ctx!.createGain();
@@ -302,6 +314,7 @@ function IncomingCallUI({ from, onAccept, onReject }: {
     }
 
     return () => {
+      stoppedRef.current = true;
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
       try { audioCtxRef.current?.close(); } catch {}
       audioCtxRef.current = null;
@@ -406,16 +419,19 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
     return pc;
   }, []);
 
-  // OUTGOING: create offer — uses MODULE-LEVEL dedup
+  // OUTGOING: create offer
   useEffect(() => {
     if (direction !== "outgoing" || !socket || startedRef.current) return;
     if (!(socket as any).userId) return;
     startedRef.current = true;
 
+    let aborted = false;
+
     (async () => {
       try {
         console.log("📞 Getting media for outgoing call");
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (aborted) { stream.getTracks().forEach((t) => t.stop()); return; }
         localStreamRef.current = stream;
         const pc = setupPeer(peer._id, stream);
         const offer = await pc.createOffer();
@@ -430,23 +446,30 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
         });
       } catch (e) {
         console.error("📞 Failed:", e);
-        outgoingCallLock = false; // Release lock on error
+        outgoingCallLock = false;
         onEndRef.current();
       }
     })();
 
-    return () => { cleanup(); outgoingCallLock = false; };
-  }, []);
+    return () => {
+      aborted = true;
+      cleanup();
+      outgoingCallLock = false;
+    };
+  }, [direction, socket, peer._id, user, setupPeer, cleanup]);
 
-  // INCOMING: answer — uses MODULE-LEVEL dedup
+  // INCOMING: answer
   useEffect(() => {
     if (direction !== "incoming" || !socket || !incomingCall || startedRef.current) return;
     startedRef.current = true;
+
+    let aborted = false;
 
     (async () => {
       try {
         console.log("📞 Getting media for incoming call");
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (aborted) { stream.getTracks().forEach((t) => t.stop()); return; }
         localStreamRef.current = stream;
         const pc = setupPeer(incomingCall.from._id, stream);
         await pc.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
@@ -460,10 +483,10 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
       }
     })();
 
-    return () => { cleanup(); };
-  }, []);
+    return () => { aborted = true; cleanup(); };
+  }, [direction, socket, incomingCall, setupPeer, cleanup]);
 
-  // Socket listeners — ONCE per socket
+  // Socket listeners
   useEffect(() => {
     if (!socket) return;
 
@@ -501,7 +524,7 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
       socket.off("call-ice-candidate", handleIce);
       socket.off("call-ended", handleEnded);
     };
-  }, [socket]);
+  }, [socket, cleanup]);
 
   // Timer
   useEffect(() => {

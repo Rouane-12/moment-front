@@ -31,7 +31,7 @@ type Attachment = {
 
 type Conversation = {
   conversationId: string;
-  otherUser: { _id: string; firstName: string; lastName: string; role: string };
+  otherUser: { _id: string; firstName: string; lastName: string; role: string; avatar?: string };
   lastMessage: { content: string; createdAt: string; sender: string; attachments?: Attachment[] };
   unreadCount: number;
 };
@@ -87,8 +87,6 @@ function ChatPage() {
       transports: ["websocket", "polling"],
     });
     socketRef.current = socket;
-
-    socket.on("connect", () => {});
 
     socket.on("new-message", (msg: Msg) => {
       setMessages((prev) => {
@@ -417,7 +415,6 @@ function ChatPage() {
     return (
       <div className="fixed inset-0 z-[300] bg-black/95 flex flex-col items-center justify-center"
         onClick={() => setMediaPreview(null)}>
-        {/* Top bar */}
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-3 z-10">
           <span className="text-white/70 text-xs truncate max-w-[60%]">{mediaPreview.name || ""}</span>
           <div className="flex items-center gap-2">
@@ -433,11 +430,11 @@ function ChatPage() {
             </button>
           </div>
         </div>
-        {/* Media */}
         <div className="w-full h-full flex items-center justify-center p-4 pt-14 pb-16"
           onClick={(e) => e.stopPropagation()}>
           {mediaPreview.type === "image" ? (
-            <img src={mediaPreview.url} alt="" className="max-w-full max-h-full object-contain rounded-lg" />
+            <img src={mediaPreview.url} alt=""
+              className="max-w-full max-h-full object-contain rounded-lg" />
           ) : (
             <video src={mediaPreview.url} controls autoPlay
               className="max-w-full max-h-full rounded-lg" />
@@ -451,8 +448,8 @@ function ChatPage() {
   if (!selectedConv) {
     return (
       <ProtectedRoute>
-        <div className="grain min-h-screen">
-          <div className="mx-auto max-w-lg px-4 sm:px-6 py-5 pb-24">
+        <div className="grain h-full overflow-y-auto">
+          <div className="px-4 sm:px-6 lg:px-8 py-5 pb-24">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="text-xl font-bold">Messages</h1>
@@ -486,7 +483,7 @@ function ChatPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input type="text" placeholder="Rechercher..." value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 rounded-xl border border-white/10 bg-white/5 focus:outline-none focus:border-primary text-sm" />
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 focus:outline-none focus:border-primary text-sm" />
             </div>
 
             {loading ? (
@@ -505,9 +502,13 @@ function ChatPage() {
                   <button key={conv.conversationId} onClick={() => setSelectedConv(conv)}
                     className="w-full p-3 flex items-center gap-3 rounded-xl hover:bg-white/5 transition-colors text-left">
                     <div className="relative w-11 h-11 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center flex-shrink-0">
-                      <span className="text-primary font-bold text-sm">
-                        {conv.otherUser.firstName[0]}{conv.otherUser.lastName[0]}
-                      </span>
+                      {conv.otherUser.avatar ? (
+                        <img src={conv.otherUser.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                        <span className="text-primary font-bold text-sm">
+                          {conv.otherUser.firstName[0]}{conv.otherUser.lastName[0]}
+                        </span>
+                      )}
                       {onlineUsers.has(conv.otherUser._id) && (
                         <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-background" />
                       )}
@@ -578,17 +579,20 @@ function ChatPage() {
   // ===== MESSAGE VIEW =====
   return (
     <ProtectedRoute>
-      {/* Full screen chat — fixed to viewport, escapes DashboardLayout padding */}
-      <div className="grain fixed inset-0 z-[60] flex flex-col overflow-hidden lg:pl-64">
+      <div className="grain h-full flex flex-col overflow-hidden">
         {/* Header — fixed at top */}
-        <div className="shrink-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/10 px-3 py-2 flex items-center gap-2.5">
+        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-b border-white/10 px-3 py-2.5 flex items-center gap-2.5 z-10">
           <button onClick={() => setSelectedConv(null)} className="p-2 rounded-xl hover:bg-white/10 transition-colors">
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="relative w-9 h-9 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center flex-shrink-0">
-            <span className="text-primary font-bold text-xs">{selectedConv.otherUser.firstName[0]}{selectedConv.otherUser.lastName[0]}</span>
+            {selectedConv.otherUser.avatar ? (
+              <img src={selectedConv.otherUser.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+            ) : (
+              <span className="text-primary font-bold text-xs">{selectedConv.otherUser.firstName[0]}{selectedConv.otherUser.lastName[0]}</span>
+            )}
             {onlineUsers.has(selectedConv.otherUser._id) && (
-              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-background" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-background" />
             )}
           </div>
           <div className="min-w-0 flex-1">
@@ -612,7 +616,7 @@ function ChatPage() {
         </div>
 
         {/* Messages — the ONLY scrollable area */}
-        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 space-y-1.5 overscroll-contain">
+        <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-3 space-y-1.5 overscroll-contain scrollbar-hide">
           {messages.length === 0 && (
             <div className="text-center py-16 text-muted-foreground">
               <MessageCircle className="h-10 w-10 mx-auto mb-2 opacity-15" />
@@ -624,7 +628,6 @@ function ChatPage() {
             return (
               <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[70%] sm:max-w-[50%] md:max-w-[40%] flex flex-col`}>
-                  {/* Text content */}
                   {msg.content && msg.content.trim() !== " " && (!msg.attachments || msg.attachments.length === 0 || msg.content.trim().length > 2) && (
                     <div
                       className={`px-3 py-2 rounded-2xl ${
@@ -649,7 +652,6 @@ function ChatPage() {
                     </div>
                   )}
 
-                  {/* Attachments */}
                   {msg.attachments?.map((att, i) => (
                     <div key={i} className="mt-1">
                       {att.type === "image" && (
@@ -666,7 +668,7 @@ function ChatPage() {
                       )}
                       {att.type === "video" && (
                         <div className="relative group rounded-xl overflow-hidden">
-                          <video src={att.url} controls preload="metadata" poster=""
+                          <video src={att.url} controls preload="metadata"
                             className="max-w-full sm:max-w-[280px] rounded-xl cursor-pointer"
                             onClick={() => setMediaPreview({ url: att.url, type: "video", name: att.name })} />
                           <a href={att.url} download={att.name || "video.mp4"}
@@ -714,7 +716,6 @@ function ChatPage() {
                     </div>
                   ))}
 
-                  {/* Timestamp + read receipt */}
                   <div className={`flex items-center gap-1 mt-0.5 px-1 ${isMe ? "justify-end" : ""}`}>
                     <span className="text-[9px] text-muted-foreground/60">
                       {new Date(msg.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
@@ -780,8 +781,8 @@ function ChatPage() {
           </div>
         )}
 
-        {/* Input bar — fixed at bottom */}
-        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-white/10 px-2 py-2 safe-area-pb">
+        {/* Input bar — fixed at bottom, ALWAYS visible */}
+        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-white/10 px-2 py-2 safe-area-pb z-10">
           {isRecording ? (
             <div className="flex items-center gap-3 px-3 py-2">
               <div className="flex items-center gap-2 flex-1">
@@ -795,7 +796,6 @@ function ChatPage() {
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
-              {/* Image upload */}
               <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
               <button onClick={() => fileInputRef.current?.click()}
                 className="p-2 rounded-xl hover:bg-white/10 transition-colors text-muted-foreground shrink-0"
@@ -803,7 +803,6 @@ function ChatPage() {
                 <ImageIcon className="h-5 w-5" />
               </button>
 
-              {/* Video upload */}
               <input type="file" accept="video/*" ref={videoInputRef} onChange={handleVideoUpload} className="hidden" />
               <button onClick={() => videoInputRef.current?.click()}
                 className="p-2 rounded-xl hover:bg-white/10 transition-colors text-muted-foreground shrink-0"
@@ -811,7 +810,6 @@ function ChatPage() {
                 <Video className="h-5 w-5" />
               </button>
 
-              {/* Document upload */}
               <input type="file" accept=".pdf,.doc,.docx,.txt,.zip,.xls,.xlsx,.ppt,.pptx" onChange={handleDocUpload} className="hidden" id="doc-input" />
               <label htmlFor="doc-input"
                 className="p-2 rounded-xl hover:bg-white/10 transition-colors text-muted-foreground cursor-pointer shrink-0"
@@ -819,7 +817,6 @@ function ChatPage() {
                 <Paperclip className="h-5 w-5" />
               </label>
 
-              {/* Emoji button */}
               <div className="relative">
                 <button onClick={() => setShowEmoji(!showEmoji)}
                   className="p-2 rounded-xl hover:bg-white/10 transition-colors text-muted-foreground shrink-0"
@@ -837,7 +834,6 @@ function ChatPage() {
                 )}
               </div>
 
-              {/* Text input */}
               <input type="text" value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
@@ -845,7 +841,6 @@ function ChatPage() {
                 className="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:border-primary text-sm min-w-0"
                 disabled={sending} />
 
-              {/* Voice or Send */}
               {newMessage.trim() ? (
                 <button onClick={handleSend} disabled={sending}
                   className="p-2.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-30 shrink-0">
@@ -862,7 +857,6 @@ function ChatPage() {
         </div>
       </div>
 
-      {/* Fullscreen media viewer */}
       <MediaViewer />
     </ProtectedRoute>
   );

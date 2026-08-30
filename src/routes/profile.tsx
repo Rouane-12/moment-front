@@ -130,15 +130,17 @@ function Profile() {
         <div className="mx-auto max-w-2xl px-4 sm:px-6 py-6 pb-24">
 
           {/* Cover image */}
-          <div className="relative rounded-2xl overflow-hidden h-40 sm:h-52 mb-16 bg-gradient-to-br from-primary/20 to-primary/5">
-            {(user as any)?.coverImage ? (
-              <img src={(user as any).coverImage} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="pattern-adinkra opacity-10 absolute inset-0" />
-                <ImageIcon className="h-10 w-10 text-primary/20" />
-              </div>
-            )}
+          <div className="relative rounded-2xl overflow-visible h-40 sm:h-52 mb-16 bg-gradient-to-br from-primary/20 to-primary/5">
+            <div className="absolute inset-0 rounded-2xl overflow-hidden">
+              {(user as any)?.coverImage ? (
+                <img src={(user as any).coverImage} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <div className="pattern-adinkra opacity-10 absolute inset-0" />
+                  <ImageIcon className="h-10 w-10 text-primary/20" />
+                </div>
+              )}
+            </div>
             {/* Cover actions */}
             <div className="absolute top-3 right-3 flex gap-2">
               <input type="file" accept="image/*" ref={coverInputRef} onChange={handleCoverUpload} className="hidden" />
@@ -157,7 +159,7 @@ function Profile() {
             </div>
 
             {/* Avatar */}
-            <div className="absolute -bottom-12 left-1/2 -translate-x-1/2">
+            <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 z-10">
               <div className="relative group">
                 <div className="w-24 h-24 rounded-full border-4 border-background overflow-hidden bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center">
                   {(user as any)?.avatar ? (
