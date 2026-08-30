@@ -79,15 +79,13 @@ export function DashboardSidebar() {
 
   return (
     <>
-      {/* Mobile hamburger — hidden on /chat page */}
-      {location.pathname !== "/chat" && (
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="fixed top-4 left-4 z-[60] lg:hidden p-2.5 rounded-xl bg-white/10 backdrop-blur-xl border border-white/10 hover:bg-white/15 transition-colors"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-      )}
+      {/* Mobile hamburger — always visible on mobile */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="fixed top-3 left-3 z-[60] lg:hidden p-2.5 rounded-xl bg-[#111]/90 backdrop-blur-xl border border-white/10 hover:bg-white/10 transition-colors shadow-lg shadow-black/30"
+      >
+        <Menu className="h-5 w-5 text-white" />
+      </button>
 
       {/* Mobile overlay */}
       {mobileOpen && (
@@ -99,7 +97,7 @@ export function DashboardSidebar() {
 
       {/* Sidebar — always expanded, no collapse */}
       <aside
-        className={`fixed left-0 top-0 z-[80] h-[100dvh] h-screen w-72 lg:w-64 bg-[#0a0a0a] border-r border-white/10 transition-transform duration-300
+        className={`fixed left-0 top-0 z-[80] h-screen w-72 lg:w-64 bg-[#0a0a0a] border-r border-white/10 transition-transform duration-300
           ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >

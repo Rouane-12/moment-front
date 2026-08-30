@@ -453,7 +453,8 @@ function ChatPage() {
   if (!selectedConv) {
     return (
       <ProtectedRoute>
-        <div className="grain flex-1 min-h-0 flex flex-col overflow-hidden">            <div className="px-4 sm:px-6 lg:px-8 py-5 pb-24 overflow-y-auto flex-1">
+        <div className="grain flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="px-4 sm:px-6 lg:px-8 pt-14 pb-24 overflow-y-auto flex-1">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="text-xl font-bold">Messages</h1>

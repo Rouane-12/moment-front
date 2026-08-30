@@ -13,7 +13,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="h-dvh h-screen bg-[#0a0a0a] overflow-hidden flex flex-col">
+    <div className="h-full bg-[#0a0a0a] overflow-hidden flex flex-col" style={{ height: '100dvh' }}>
       <DashboardSidebar />
       {isChat ? (
         /* Chat: flex-1 to fill remaining height, no padding, no scroll on wrapper */
