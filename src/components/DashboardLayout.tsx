@@ -15,10 +15,10 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <div className="h-screen bg-[#0a0a0a] overflow-hidden">
       <DashboardSidebar />
-      {/* For chat: no padding, just the sidebar offset. For others: normal padding */}
-      <div className={`h-full lg:pl-64 transition-all duration-300 ${isChat ? "" : "overflow-y-auto"}`}>
+      {/* Chat: relative + no scroll (child uses absolute inset-0). Others: normal scrollable */}
+      <div className={`h-full lg:pl-64 transition-all duration-300 ${isChat ? "relative" : "overflow-y-auto"}`}>
         {isChat ? (
-          <div className="h-full">{children}</div>
+          children
         ) : (
           <div className="pt-16 lg:pt-8 px-4 sm:px-6 lg:px-8 pb-8">{children}</div>
         )}

@@ -13,7 +13,7 @@ import * as LucideIcons from "lucide-react";
 const {
   MessageCircle, Send, QrCode, ArrowLeft, Check, CheckCheck, Search, X,
   Camera, Shield, Mic, Paperclip, FileText, Square, Phone, PhoneOff,
-  Play, Pause, Trash2, Pencil, Download, Video, Smile
+  Play, Pause, Trash2, Pencil, Download, Video, Smile, Loader2
 } = LucideIcons;
 const ImageIcon = LucideIcons.Image;
 
@@ -56,6 +56,7 @@ function ChatPage() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [qrToken, setQrToken] = useState("");
@@ -131,6 +132,7 @@ function ChatPage() {
 
   const loadMessages = useCallback(async (convId: string) => {
     try {
+      setLoadingMessages(true);
       setMessages([]);
       const res = await api.chat.getMessages(convId);
       if (res.success) setMessages((res as any).messages || []);
@@ -139,6 +141,7 @@ function ChatPage() {
         prev.map((c) => c.conversationId === convId ? { ...c, unreadCount: 0 } : c)
       );
     } catch (e) { console.error(e); }
+    finally { setLoadingMessages(false); }
   }, []);
 
   useEffect(() => {
@@ -151,7 +154,7 @@ function ChatPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, loadingMessages]);
 
   // === SEND TEXT MESSAGE ===
   const handleSend = async () => {
@@ -577,10 +580,12 @@ function ChatPage() {
   }
 
   // ===== MESSAGE VIEW =====
+  // Use absolute positioning to fill the ENTIRE available space.
+  // Header and input are position:sticky within this container — they NEVER scroll.
   return (
     <ProtectedRoute>
-      <div className="grain h-full flex flex-col overflow-hidden">
-        {/* Header — fixed at top */}
+      <div className="grain absolute inset-0 flex flex-col overflow-hidden bg-background">
+        {/* ── HEADER (sticky, never scrolls) ── */}
         <div className="shrink-0 bg-background/80 backdrop-blur-xl border-b border-white/10 px-3 py-2.5 flex items-center gap-2.5 z-10">
           <button onClick={() => setSelectedConv(null)} className="p-2 rounded-xl hover:bg-white/10 transition-colors">
             <ArrowLeft className="h-5 w-5" />
@@ -615,125 +620,142 @@ function ChatPage() {
           </div>
         </div>
 
-        {/* Messages — the ONLY scrollable area */}
+        {/* ── MESSAGES (the ONLY scrollable area) ── */}
         <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-3 space-y-1.5 overscroll-contain scrollbar-hide">
-          {messages.length === 0 && (
+          {loadingMessages ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3">
+              <Loader2 className="h-8 w-8 text-primary animate-spin" />
+              <p className="text-xs text-muted-foreground">Chargement des messages...</p>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
               <MessageCircle className="h-10 w-10 mx-auto mb-2 opacity-15" />
               <p className="text-xs">Envoyez le premier message</p>
             </div>
-          )}
-          {messages.map((msg) => {
-            const isMe = msg.sender._id === user?.id;
-            return (
-              <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[70%] sm:max-w-[50%] md:max-w-[40%] flex flex-col`}>
-                  {msg.content && msg.content.trim() !== " " && (!msg.attachments || msg.attachments.length === 0 || msg.content.trim().length > 2) && (
-                    <div
-                      className={`px-3 py-2 rounded-2xl ${
-                        isMe
-                          ? "bg-primary text-primary-foreground rounded-br-sm"
-                          : "bg-white/8 border border-white/5 text-foreground rounded-bl-sm"
-                      }`}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        if (isMe) showContextMenuFor(msg._id, e.clientX, e.clientY);
-                      }}
-                      onClick={() => {
-                        if (isMe) {
-                          const timer = setTimeout(() => showContextMenuFor(msg._id, window.innerWidth / 2, window.innerHeight / 2), 500);
-                          const cancel = () => { clearTimeout(timer); document.removeEventListener("touchend", cancel); };
-                          document.addEventListener("touchend", cancel, { once: true });
-                        }
-                      }}
-                    >
-                      <p className="text-[13px] leading-relaxed break-words whitespace-pre-wrap">{msg.content.trim()}</p>
-                      {msg.edited && <span className="text-[9px] opacity-50 italic">modifié</span>}
-                    </div>
-                  )}
+          ) : (
+            <>
+              {messages.map((msg) => {
+                const isMe = msg.sender._id === user?.id;
+                return (
+                  <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                    <div className="max-w-[70%] sm:max-w-[50%] md:max-w-[40%] flex flex-col">
+                      {msg.content && msg.content.trim() !== " " && (!msg.attachments || msg.attachments.length === 0 || msg.content.trim().length > 2) && (
+                        <div
+                          className={`px-3 py-2 rounded-2xl ${
+                            isMe
+                              ? "bg-primary text-primary-foreground rounded-br-sm"
+                              : "bg-white/8 border border-white/5 text-foreground rounded-bl-sm"
+                          }`}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            if (isMe) showContextMenuFor(msg._id, e.clientX, e.clientY);
+                          }}
+                          onClick={() => {
+                            if (isMe) {
+                              const timer = setTimeout(() => showContextMenuFor(msg._id, window.innerWidth / 2, window.innerHeight / 2), 500);
+                              const cancel = () => { clearTimeout(timer); document.removeEventListener("touchend", cancel); };
+                              document.addEventListener("touchend", cancel, { once: true });
+                            }
+                          }}
+                        >
+                          <p className="text-[13px] leading-relaxed break-words whitespace-pre-wrap">{msg.content.trim()}</p>
+                          {msg.edited && <span className="text-[9px] opacity-50 italic">modifié</span>}
+                        </div>
+                      )}
 
-                  {msg.attachments?.map((att, i) => (
-                    <div key={i} className="mt-1">
-                      {att.type === "image" && (
-                        <div className="relative group">
-                          <img src={att.url} alt=""
-                            className="max-w-full sm:max-w-[240px] rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
-                            onClick={() => setMediaPreview({ url: att.url, type: "image", name: att.name })} />
-                          <a href={att.url} download={att.name || "image.jpg"}
-                            onClick={(e) => e.stopPropagation()}
-                            className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Download className="h-4 w-4" />
-                          </a>
-                        </div>
-                      )}
-                      {att.type === "video" && (
-                        <div className="relative group rounded-xl overflow-hidden">
-                          <video src={att.url} controls preload="metadata"
-                            className="max-w-full sm:max-w-[280px] rounded-xl cursor-pointer"
-                            onClick={() => setMediaPreview({ url: att.url, type: "video", name: att.name })} />
-                          <a href={att.url} download={att.name || "video.mp4"}
-                            onClick={(e) => e.stopPropagation()}
-                            className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Download className="h-4 w-4" />
-                          </a>
-                        </div>
-                      )}
-                      {att.type === "voice" && (
-                        <VoiceMessage url={att.url} duration={att.duration} isMe={isMe} />
-                      )}
-                      {att.type === "document" && (
-                        <a href={att.url} download={att.name}
-                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl max-w-[260px] ${
-                            isMe ? "bg-primary/20 border border-primary/30" : "bg-white/8 border border-white/5"
-                          }`}>
-                          <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center shrink-0">
-                            <FileText className="h-5 w-5 text-red-400" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold truncate" title={att.name}>{att.name}</p>
-                            <p className="text-[10px] text-muted-foreground">{formatSize(att.size)}</p>
-                          </div>
-                        </a>
-                      )}
-                      {att.type === "call" && (
-                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl ${
-                          att.status === "missed"
-                            ? "bg-red-500/10 border border-red-500/20"
-                            : "bg-green-500/10 border border-green-500/20"
-                        }`}>
-                          {att.status === "missed" ? (
-                            <PhoneOff className="h-4 w-4 text-red-400" />
-                          ) : (
-                            <Phone className="h-4 w-4 text-green-400" />
+                      {msg.attachments?.map((att, i) => (
+                        <div key={i} className="mt-1">
+                          {att.type === "image" && (
+                            <div className="relative group">
+                              <img src={att.url} alt=""
+                                className="max-w-full sm:max-w-[240px] rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => setMediaPreview({ url: att.url, type: "image", name: att.name })} />
+                              <a href={att.url} download={att.name || "image.jpg"}
+                                onClick={(e) => e.stopPropagation()}
+                                className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Download className="h-4 w-4" />
+                              </a>
+                            </div>
                           )}
-                          <span className={`text-xs font-semibold ${
-                            att.status === "missed" ? "text-red-400" : "text-green-400"
-                          }`}>
-                            {att.status === "missed" ? "Appel manqué" : "Appel"}
-                          </span>
+                          {att.type === "video" && (
+                            <div className="relative group rounded-xl overflow-hidden">
+                              <video src={att.url} controls preload="metadata"
+                                className="max-w-full sm:max-w-[280px] rounded-xl cursor-pointer"
+                                onClick={() => setMediaPreview({ url: att.url, type: "video", name: att.name })} />
+                              <a href={att.url} download={att.name || "video.mp4"}
+                                onClick={(e) => e.stopPropagation()}
+                                className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Download className="h-4 w-4" />
+                              </a>
+                            </div>
+                          )}
+                          {att.type === "voice" && (
+                            <VoiceMessage url={att.url} duration={att.duration} isMe={isMe} />
+                          )}
+                          {att.type === "document" && (
+                            <a href={att.url} download={att.name}
+                              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl max-w-[260px] ${
+                                isMe ? "bg-primary/20 border border-primary/30" : "bg-white/8 border border-white/5"
+                              }`}>
+                              <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center shrink-0">
+                                <FileText className="h-5 w-5 text-red-400" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-semibold truncate" title={att.name}>{att.name}</p>
+                                <p className="text-[10px] text-muted-foreground">{formatSize(att.size)}</p>
+                              </div>
+                            </a>
+                          )}
+                          {att.type === "call" && (
+                            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl ${
+                              att.status === "missed"
+                                ? "bg-red-500/10 border border-red-500/20"
+                                : "bg-green-500/10 border border-green-500/20"
+                            }`}>
+                              {att.status === "missed" ? (
+                                <PhoneOff className="h-4 w-4 text-red-400" />
+                              ) : (
+                                <Phone className="h-4 w-4 text-green-400" />
+                              )}
+                              <span className={`text-xs font-semibold ${
+                                att.status === "missed" ? "text-red-400" : "text-green-400"
+                              }`}>
+                                {att.status === "missed" ? "Appel manqué" : "Appel"}
+                              </span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                      ))}
 
-                  <div className={`flex items-center gap-1 mt-0.5 px-1 ${isMe ? "justify-end" : ""}`}>
-                    <span className="text-[9px] text-muted-foreground/60">
-                      {new Date(msg.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                    {isMe && (
-                      msg.read
-                        ? <CheckCheck className="h-3 w-3 text-blue-400" />
-                        : <Check className="h-3 w-3 text-muted-foreground/40" />
-                    )}
+                      <div className={`flex items-center gap-1 mt-0.5 px-1 ${isMe ? "justify-end" : ""}`}>
+                        <span className="text-[9px] text-muted-foreground/60">
+                          {new Date(msg.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                        {isMe && (
+                          msg.read
+                            ? <CheckCheck className="h-3 w-3 text-blue-400" />
+                            : <Check className="h-3 w-3 text-muted-foreground/40" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {/* Sending indicator */}
+              {sending && (
+                <div className="flex justify-end">
+                  <div className="bg-primary/20 border border-primary/30 px-3 py-2 rounded-2xl rounded-br-sm flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
+                    <span className="text-xs text-primary">Envoi...</span>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-          <div ref={messagesEndRef} />
+              )}
+              <div ref={messagesEndRef} />
+            </>
+          )}
         </div>
 
-        {/* Context Menu */}
+        {/* ── CONTEXT MENU ── */}
         {contextMenu && (() => {
           const msg = messages.find((m) => m._id === contextMenu.msgId);
           if (!msg) return null;
@@ -759,9 +781,9 @@ function ChatPage() {
           );
         })()}
 
-        {/* Edit bar — fixed above input */}
+        {/* ── EDIT BAR (sticky, above input) ── */}
         {editingMsg && (
-          <div className="shrink-0 z-50 bg-blue-900/30 border-t border-blue-500/30 px-3 py-2">
+          <div className="shrink-0 bg-blue-900/30 border-t border-blue-500/30 px-3 py-2 z-10">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[11px] text-blue-400 font-medium">Modification du message</span>
               <button onClick={() => { setEditingMsg(null); setEditContent(""); }} className="text-white/50 hover:text-white">
@@ -781,7 +803,7 @@ function ChatPage() {
           </div>
         )}
 
-        {/* Input bar — fixed at bottom, ALWAYS visible */}
+        {/* ── INPUT BAR (sticky, NEVER scrolls) ── */}
         <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-white/10 px-2 py-2 safe-area-pb z-10">
           {isRecording ? (
             <div className="flex items-center gap-3 px-3 py-2">
@@ -844,7 +866,7 @@ function ChatPage() {
               {newMessage.trim() ? (
                 <button onClick={handleSend} disabled={sending}
                   className="p-2.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-30 shrink-0">
-                  <Send className="h-4 w-4" />
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </button>
               ) : (
                 <button onClick={startRecording}
