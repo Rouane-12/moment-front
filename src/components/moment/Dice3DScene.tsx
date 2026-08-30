@@ -2,27 +2,31 @@ import { useRef, useState, useEffect } from "react";
 
 type Dice3DSceneProps = {
   spinning: boolean;
-  targetValue: number;
+  onResult: (value: number) => void;
 };
 
-export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
+export function Dice3DScene({ spinning, onResult }: Dice3DSceneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<any>(null);
   const worldRef = useRef<any>(null);
   const diceBodyRef = useRef<any>(null);
-  const diceMeshRef = useRef<any>(null);
   const animFrameRef = useRef<number>(0);
   const settleCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const physicsFrozenRef = useRef(false);
+  const resultSentRef = useRef(false);
   const [ready, setReady] = useState(false);
   const initializedRef = useRef(false);
+  const onResultRef = useRef(onResult);
+
+  useEffect(() => {
+    onResultRef.current = onResult;
+  }, [onResult]);
 
   // Initialize scene (only once, client-side)
   useEffect(() => {
     if (!containerRef.current || initializedRef.current) return;
     initializedRef.current = true;
 
-    // Dynamic imports — only executed on client
     Promise.all([import("three"), import("cannon-es")]).then(
       ([THREE, CANNON]) => {
         _CANNON = CANNON;
@@ -34,7 +38,7 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
         // Scene
         const scene = new THREE.Scene();
 
-        // Camera — positioned to see the dice in center
+        // Camera
         const camera = new THREE.PerspectiveCamera(38, w / h, 0.1, 100);
         camera.position.set(0, 3.2, 5.5);
         camera.lookAt(0, 0.6, 0);
@@ -108,7 +112,7 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
         floorMesh.receiveShadow = true;
         scene.add(floorMesh);
 
-        // Walls — tight to keep dice centered
+        // Walls
         const wallConfigs = [
           { pos: [1.5, 1, 0], euler: [0, -Math.PI / 2, 0] },
           { pos: [-1.5, 1, 0], euler: [0, Math.PI / 2, 0] },
@@ -179,8 +183,12 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
           ],
         };
 
+        // Store face normals for top-face detection
+        const faceNormals: { value: number; normal: THREE.Vector3 }[] = [];
+
         faceConfigs.forEach(({ value, n, u }) => {
           const normal = new THREE.Vector3(n[0], n[1], n[2]);
+          faceNormals.push({ value, normal: normal.clone() });
           const up = new THREE.Vector3(u[0], u[1], u[2]);
           const right = new THREE.Vector3().crossVectors(up, normal).normalize();
           const adjUp = new THREE.Vector3()
@@ -201,12 +209,11 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
           });
         });
 
-        // Start dice at rest on floor — visible in center
+        // Start dice at rest on floor
         diceGroup.position.set(0, 0.1, 0);
         scene.add(diceGroup);
-        diceMeshRef.current = diceGroup;
 
-        // Dice physics body — at rest on floor until spin
+        // Dice physics body
         const diceBody = new CANNON.Body({
           mass: 1,
           shape: new CANNON.Box(new CANNON.Vec3(half, half, half)),
@@ -219,6 +226,10 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
         world.addBody(diceBody);
         diceBodyRef.current = diceBody;
 
+        // Expose faceNormals for detection
+        (window as any).__diceFaceNormals = faceNormals;
+        (window as any).__diceTHREE = THREE;
+
         // Animate loop
         let lastTime = performance.now();
         const animate = () => {
@@ -226,7 +237,6 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
           const now = performance.now();
           const dt = Math.min((now - lastTime) / 1000, 0.1);
           lastTime = now;
-          // Skip physics after snap to keep dice face stable
           if (!physicsFrozenRef.current) {
             world.step(1 / 60, dt, 3);
           }
@@ -261,15 +271,14 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
   useEffect(() => {
     if (!spinning || !ready || !diceBodyRef.current) return;
 
+    resultSentRef.current = false;
     const body = diceBodyRef.current;
     body.wakeUp();
-    // Start from center, slightly above floor
     body.position.set(0, 1.2, 0);
     body.quaternion.set(
       Math.random(), Math.random(), Math.random(), 1,
     );
     body.quaternion.normalize();
-    // Upward spin — stays centered, doesn't fly off
     body.velocity.set(
       (Math.random() - 0.5) * 1.5,
       8 + Math.random() * 2,
@@ -281,33 +290,55 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
       (Math.random() - 0.5) * 20,
     );
 
-    // Reset frozen state on new spin
     physicsFrozenRef.current = false;
 
-    // Detect settle
+    // Detect settle — then detect which face is on top
     settleCheckRef.current = setInterval(() => {
       const v = body.velocity;
       const a = body.angularVelocity;
       const speed = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
       const angSpeed = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
-      if (speed < 0.2 && angSpeed < 0.2 && body.position.y < 1) {
+      if (speed < 0.2 && angSpeed < 0.2 && body.position.y < 1 && !resultSentRef.current) {
         if (settleCheckRef.current) clearInterval(settleCheckRef.current);
-        snapDice(body, targetValue);
+        resultSentRef.current = true;
+
+        // Freeze physics
+        body.velocity.set(0, 0, 0);
+        body.angularVelocity.set(0, 0, 0);
+        body.sleep();
+        body.mass = 0;
+        body.updateMassProperties();
         physicsFrozenRef.current = true;
+
+        // Detect which face is on top from the quaternion
+        const topFace = detectTopFace(body.quaternion);
+        onResultRef.current(topFace);
       }
     }, 80);
 
+    // Fallback — force detection after 3s
     const fallback = setTimeout(() => {
-      if (settleCheckRef.current) clearInterval(settleCheckRef.current);
-      snapDice(body, targetValue);
-      physicsFrozenRef.current = true;
-    }, 2500);
+      if (!resultSentRef.current) {
+        if (settleCheckRef.current) clearInterval(settleCheckRef.current);
+        resultSentRef.current = true;
+
+        body.velocity.set(0, 0, 0);
+        body.angularVelocity.set(0, 0, 0);
+        body.sleep();
+        body.mass = 0;
+        body.updateMassProperties();
+        physicsFrozenRef.current = true;
+
+        const topFace = detectTopFace(body.quaternion);
+        onResultRef.current(topFace);
+      }
+    }, 3000);
 
     return () => {
       if (settleCheckRef.current) clearInterval(settleCheckRef.current);
       clearTimeout(fallback);
     };
-  }, [spinning, ready, targetValue]);
+  }, [spinning, ready]);
 
   return (
     <div
@@ -318,49 +349,44 @@ export function Dice3DScene({ spinning, targetValue }: Dice3DSceneProps) {
   );
 }
 
-/* ── Snap dice body to face a specific value ── */
-// We store the CANNON module ref from the lazy import
+/* ── Detect which face is on top from the dice body quaternion ── */
 let _CANNON: typeof import("cannon-es") | null = null;
 
 /**
- * Face layout on the dice mesh:
- *   1 = +Z  (front)
- *   2 = +X  (right)
- *   3 = +Y  (top — default rest)
- *   4 = -Y  (bottom)
- *   5 = -X  (left)
- *   6 = -Z  (back)
+ * Face layout (same as faceConfigs):
+ *   1 = +Z, 2 = +X, 3 = +Y, 4 = -Y, 5 = -X, 6 = -Z
  *
- * To show value V on top, rotate the die so that face V's normal
- * ends up pointing along +Y.
+ * We rotate each face normal by the body quaternion,
+ * then find which rotated normal is closest to +Y (up).
  */
-function snapDice(body: any, value: number) {
-  // axis-angle rotations: rotate face normal → +Y
-  const axisAngle: Record<number, [number, number, number, number]> = {
-    1: [1, 0, 0, -Math.PI / 2],   // +Z → +Y
-    2: [0, 0, 1,  Math.PI / 2],   // +X → +Y
-    3: [0, 0, 0,  0],             // already +Y — no rotation
-    4: [1, 0, 0,  Math.PI],       // -Y → +Y
-    5: [0, 0, 1, -Math.PI / 2],   // -X → +Y
-    6: [1, 0, 0,  Math.PI / 2],   // -Z → +Y
-  };
+function detectTopFace(quaternion: any): number {
+  const faceNormals: [number, number, number, number][] = [
+    [1, 0, 0, 1],  // +Z → value 1
+    [2, 1, 0, 0],  // +X → value 2
+    [3, 0, 1, 0],  // +Y → value 3
+    [4, 0, -1, 0], // -Y → value 4
+    [5, -1, 0, 0], // -X → value 5
+    [6, 0, 0, -1], // -Z → value 6
+  ];
 
-  body.velocity.set(0, 0, 0);
-  body.angularVelocity.set(0, 0, 0);
-  body.position.set(0, 0.15, 0);
+  // Convert cannon-es quaternion to Three.js quaternion for rotation
+  const THREE = (window as any).__diceTHREE;
+  if (!THREE) return 3; // fallback
 
-  if (_CANNON) {
-    const [ax, ay, az, angle] = axisAngle[value] || axisAngle[1];
-    const q = new _CANNON.Quaternion();
-    if (angle === 0) {
-      q.set(0, 0, 0, 1); // identity quaternion
-    } else {
-      q.setFromAxisAngle(new _CANNON.Vec3(ax, ay, az), angle);
+  const q = new THREE.Quaternion(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+  let bestValue = 1;
+  let bestDot = -2;
+
+  for (const [value, nx, ny, nz] of faceNormals) {
+    const normal = new THREE.Vector3(nx, ny, nz);
+    normal.applyQuaternion(q);
+    // Dot product with +Y (up direction)
+    const dot = normal.y;
+    if (dot > bestDot) {
+      bestDot = dot;
+      bestValue = value;
     }
-    body.quaternion.copy(q);
-    // Freeze the body so physics won't override the snap
-    body.sleep();
-    body.mass = 0;
-    body.updateMassProperties();
   }
+
+  return bestValue;
 }

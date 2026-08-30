@@ -6,24 +6,27 @@ import { api } from "@/lib/api";
 import { io, Socket } from "socket.io-client";
 import { QRCodeSVG } from "qrcode.react";
 import { Html5Qrcode } from "html5-qrcode";
+import { EmojiPicker } from "@/components/EmojiPicker";
 
 import * as LucideIcons from "lucide-react";
 
 const {
   MessageCircle, Send, QrCode, ArrowLeft, Check, CheckCheck, Search, X,
   Camera, Shield, Mic, Paperclip, FileText, Square, Phone, PhoneOff,
-  Play, Pause, Trash2, Pencil, MoreVertical
+  Play, Pause, Trash2, Pencil, Download, Video, Smile
 } = LucideIcons;
+const ImageIcon = LucideIcons.Image;
 
 export const Route = createFileRoute("/chat")({ ssr: false, component: ChatPage });
 
 type Attachment = {
-  type: "image" | "voice" | "document";
+  type: "image" | "voice" | "document" | "video" | "call";
   url: string;
   name?: string;
   size?: number;
   duration?: number;
   mimeType?: string;
+  status?: string;
 };
 
 type Conversation = {
@@ -60,14 +63,17 @@ function ChatPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<{ url: string; type: "image" | "video"; name?: string } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ msgId: string; x: number; y: number } | null>(null);
   const [editingMsg, setEditingMsg] = useState<Msg | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordingDurationRef = useRef(0);
@@ -76,28 +82,23 @@ function ChatPage() {
   // === SOCKET.IO ===
   useEffect(() => {
     const token = localStorage.getItem("token") || document.cookie.match(/token=([^;]+)/)?.[1] || "";
-    console.log("🔌 Socket token exists:", !!token, "length:", token.length);
     const socket = io(import.meta.env["VITE_API_URL"] || "http://localhost:5200", {
       auth: { token },
       transports: ["websocket", "polling"],
     });
     socketRef.current = socket;
 
-    socket.on("connect", () => console.log("🔌 Socket connected"));
+    socket.on("connect", () => {});
 
     socket.on("new-message", (msg: Msg) => {
-      // Update messages if viewing this conversation
       setMessages((prev) => {
         if (prev.find((m) => m._id === msg._id)) return prev;
         return [...prev, msg];
       });
-      // Refresh conversations
       loadConversations();
     });
 
-    socket.on("messages-read", () => {
-      loadConversations();
-    });
+    socket.on("messages-read", () => { loadConversations(); });
 
     socket.on("message-edited", (msg: Msg) => {
       setMessages((prev) => prev.map((m) => (m._id === msg._id ? msg : m)));
@@ -107,9 +108,16 @@ function ChatPage() {
       setMessages((prev) => prev.filter((m) => m._id !== data.messageId));
     });
 
-    return () => {
-      socket.disconnect();
-    };
+    socket.on("presence-update", (data: { userId: string; online: boolean }) => {
+      setOnlineUsers((prev) => {
+        const next = new Set(prev);
+        if (data.online) next.add(data.userId);
+        else next.delete(data.userId);
+        return next;
+      });
+    });
+
+    return () => { socket.disconnect(); };
   }, []);
 
   // === DATA LOADING ===
@@ -125,20 +133,16 @@ function ChatPage() {
 
   const loadMessages = useCallback(async (convId: string) => {
     try {
-      setMessages([]); // Clear previous conversation messages
+      setMessages([]);
       const res = await api.chat.getMessages(convId);
       if (res.success) setMessages((res as any).messages || []);
       await api.chat.markRead(convId);
-      // Clear unread badge locally
       setConversations((prev) =>
-        prev.map((c) =>
-          c.conversationId === convId ? { ...c, unreadCount: 0 } : c,
-        ),
+        prev.map((c) => c.conversationId === convId ? { ...c, unreadCount: 0 } : c)
       );
     } catch (e) { console.error(e); }
   }, []);
 
-  // Join/leave conversation rooms
   useEffect(() => {
     if (!selectedConv || !socketRef.current) return;
     const socket = socketRef.current;
@@ -188,7 +192,6 @@ function ChatPage() {
     setContextMenu({ msgId, x: Math.min(x, window.innerWidth - 180), y: Math.min(y, window.innerHeight - 100) });
   };
 
-  // Close context menu on outside click
   useEffect(() => {
     const close = () => setContextMenu(null);
     if (contextMenu) {
@@ -198,19 +201,19 @@ function ChatPage() {
     }
   }, [contextMenu]);
 
-  // Compress image to max 800px width
+  // === COMPRESS IMAGE ===
   const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
       const img = new window.Image();
       img.onload = () => {
         const maxW = 800;
         const ratio = Math.min(maxW / img.width, 1);
         canvas.width = img.width * ratio;
         canvas.height = img.height * ratio;
-        const ctx = canvas.getContext('2d')!;
+        const ctx = canvas.getContext("2d")!;
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
+        resolve(canvas.toDataURL("image/jpeg", 0.8));
       };
       img.src = URL.createObjectURL(file);
     });
@@ -226,8 +229,26 @@ function ChatPage() {
       await api.chat.send(selectedConv.otherUser._id, " ", {
         attachments: [{ type: "image", url: base64, name: file.name, size: file.size, mimeType: file.type }],
       });
-    } catch (e) { console.error('Image send error:', e); }
+    } catch (e) { console.error("Image send error:", e); }
     finally { setSending(false); if (fileInputRef.current) fileInputRef.current.value = ""; }
+  };
+
+  // === SEND VIDEO ===
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedConv) return;
+    setSending(true);
+    try {
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+      await api.chat.send(selectedConv.otherUser._id, " ", {
+        attachments: [{ type: "video", url: base64, name: file.name, size: file.size, mimeType: file.type }],
+      });
+    } catch (e) { console.error("Video send error:", e); }
+    finally { setSending(false); if (videoInputRef.current) videoInputRef.current.value = ""; }
   };
 
   // === SEND DOCUMENT ===
@@ -241,11 +262,10 @@ function ChatPage() {
         reader.onload = () => resolve(reader.result as string);
         reader.readAsDataURL(file);
       });
-      // Send document ONLY as attachment, no text content to avoid duplication
       await api.chat.send(selectedConv.otherUser._id, " ", {
         attachments: [{ type: "document", url: base64, name: file.name, size: file.size, mimeType: file.type }],
       });
-    } catch (e) { console.error('Doc send error:', e); }
+    } catch (e) { console.error("Doc send error:", e); }
     finally { setSending(false); }
   };
 
@@ -253,11 +273,9 @@ function ChatPage() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, sampleRate: 16000 } });
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : 'audio/mp4';
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
       const recorder = new MediaRecorder(stream, { mimeType });
       const chunks: BlobPart[] = [];
       const startTime = Date.now();
@@ -265,26 +283,17 @@ function ChatPage() {
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
 
       recorder.onstop = async () => {
-        // Calculate duration from actual recording time
         const durationSec = Math.round((Date.now() - startTime) / 1000);
-        console.log('Voice duration:', durationSec, 'seconds');
-
         if (chunks.length === 0) { stream.getTracks().forEach((t) => t.stop()); return; }
         const blob = new Blob(chunks, { type: mimeType });
-
-        // Use Date.now() duration directly — audio.duration returns Infinity for base64
-        const finalDuration = durationSec;
-        console.log('Final voice duration:', finalDuration, 'seconds');
-
         const base64 = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result as string);
           reader.readAsDataURL(blob);
         });
-
         if (selectedConv) {
           await api.chat.send(selectedConv.otherUser._id, " ", {
-            attachments: [{ type: "voice", url: base64, duration: finalDuration, mimeType }],
+            attachments: [{ type: "voice", url: base64, duration: durationSec, mimeType }],
           });
         }
         stream.getTracks().forEach((t) => t.stop());
@@ -300,7 +309,7 @@ function ChatPage() {
         setRecordingTime(recordingDurationRef.current);
       }, 1000);
     } catch (e) {
-      console.error('Recording error:', e);
+      console.error("Recording error:", e);
       alert("Autorisez l'accès au microphone pour les messages vocaux");
     }
   };
@@ -385,22 +394,58 @@ function ChatPage() {
     `${c.otherUser.firstName} ${c.otherUser.lastName}`.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Format last message preview based on attachment type
-  const formatLastMessage = (msg: Conversation['lastMessage']) => {
+  const formatLastMessage = (msg: Conversation["lastMessage"]) => {
     if (!msg.content && (!msg.attachments || msg.attachments.length === 0)) return "Démarrer la conversation";
     if (msg.attachments && msg.attachments.length > 0) {
       const att = msg.attachments[0]!;
-      if (att.type === 'image') return '📷 Photo';
-      if (att.type === 'voice') return '🎤 Message vocal';
-      if (att.type === 'document') return `📄 ${att.name || 'Document'}`;
-      if (att.type === 'call') return att.status === 'missed' ? '📞 Appel manqué' : '📞 Appel';
+      if (att.type === "image") return "📷 Photo";
+      if (att.type === "video") return "🎥 Vidéo";
+      if (att.type === "voice") return "🎤 Message vocal";
+      if (att.type === "document") return `📄 ${att.name || "Document"}`;
+      if (att.type === "call") return att.status === "missed" ? "📞 Appel manqué" : "📞 Appel";
     }
-    return msg.content || '';
+    return msg.content || "";
   };
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
   const formatSize = (b?: number) => b ? `${(b / 1024).toFixed(0)} Ko` : "";
   const isPartnerOrAdmin = user?.role === "partner_owner" || user?.role === "admin" || user?.role === "super_admin";
+
+  // ===== FULLSCREEN MEDIA VIEWER =====
+  const MediaViewer = () => {
+    if (!mediaPreview) return null;
+    return (
+      <div className="fixed inset-0 z-[300] bg-black/95 flex flex-col items-center justify-center"
+        onClick={() => setMediaPreview(null)}>
+        {/* Top bar */}
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-3 z-10">
+          <span className="text-white/70 text-xs truncate max-w-[60%]">{mediaPreview.name || ""}</span>
+          <div className="flex items-center gap-2">
+            <a href={mediaPreview.url} download={mediaPreview.name || "media"}
+              onClick={(e) => e.stopPropagation()}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white"
+              title="Télécharger">
+              <Download className="h-5 w-5" />
+            </a>
+            <button onClick={(e) => { e.stopPropagation(); setMediaPreview(null); }}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+        {/* Media */}
+        <div className="w-full h-full flex items-center justify-center p-4 pt-14 pb-16"
+          onClick={(e) => e.stopPropagation()}>
+          {mediaPreview.type === "image" ? (
+            <img src={mediaPreview.url} alt="" className="max-w-full max-h-full object-contain rounded-lg" />
+          ) : (
+            <video src={mediaPreview.url} controls autoPlay
+              className="max-w-full max-h-full rounded-lg" />
+          )}
+        </div>
+      </div>
+    );
+  };
 
   // ===== CONVERSATION LIST =====
   if (!selectedConv) {
@@ -459,10 +504,13 @@ function ChatPage() {
                 {filtered.map((conv) => (
                   <button key={conv.conversationId} onClick={() => setSelectedConv(conv)}
                     className="w-full p-3 flex items-center gap-3 rounded-xl hover:bg-white/5 transition-colors text-left">
-                    <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center flex-shrink-0">
+                    <div className="relative w-11 h-11 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center flex-shrink-0">
                       <span className="text-primary font-bold text-sm">
                         {conv.otherUser.firstName[0]}{conv.otherUser.lastName[0]}
                       </span>
+                      {onlineUsers.has(conv.otherUser._id) && (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-background" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
@@ -487,7 +535,6 @@ function ChatPage() {
               </div>
             )}
 
-            {/* QR Modals */}
             {showQR && (
               <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => { setShowQR(false); setQrToken(""); }}>
                 <div className="bg-[#111] rounded-2xl max-w-xs w-full p-5 text-center border border-white/10" onClick={(e) => e.stopPropagation()}>
@@ -521,11 +568,7 @@ function ChatPage() {
               </div>
             )}
 
-            {previewImage && (
-              <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4" onClick={() => setPreviewImage(null)}>
-                <img src={previewImage} alt="Preview" className="max-w-full max-h-full object-contain rounded-lg" />
-              </div>
-            )}
+            <MediaViewer />
           </div>
         </div>
       </ProtectedRoute>
@@ -535,27 +578,31 @@ function ChatPage() {
   // ===== MESSAGE VIEW =====
   return (
     <ProtectedRoute>
-      <div className="grain min-h-screen flex flex-col">
-        {/* Header */}
-        <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/10 px-3 py-2 flex items-center gap-2.5">
-          <button onClick={() => setSelectedConv(null)} className="p-2 rounded-xl hover:bg-white/10 transition-colors lg:hidden">
+      {/* Full screen chat — no scrolling outside, only messages scroll */}
+      <div className="grain h-[100dvh] flex flex-col overflow-hidden">
+        {/* Header — fixed at top */}
+        <div className="shrink-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/10 px-3 py-2 flex items-center gap-2.5">
+          <button onClick={() => setSelectedConv(null)} className="p-2 rounded-xl hover:bg-white/10 transition-colors">
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center flex-shrink-0">
+          <div className="relative w-9 h-9 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center flex-shrink-0">
             <span className="text-primary font-bold text-xs">{selectedConv.otherUser.firstName[0]}{selectedConv.otherUser.lastName[0]}</span>
+            {onlineUsers.has(selectedConv.otherUser._id) && (
+              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-background" />
+            )}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="font-semibold text-sm truncate">{selectedConv.otherUser.firstName} {selectedConv.otherUser.lastName}</p>
             <p className="text-[10px] text-muted-foreground">
-              {selectedConv.otherUser.role === "admin" || selectedConv.otherUser.role === "super_admin" ? "Administrateur" : selectedConv.otherUser.role === "partner_owner" ? "Partenaire" : "Membre"}
+              {onlineUsers.has(selectedConv.otherUser._id)
+                ? <span className="text-green-400">En ligne</span>
+                : selectedConv.otherUser.role === "admin" || selectedConv.otherUser.role === "super_admin" ? "Administrateur" : selectedConv.otherUser.role === "partner_owner" ? "Partenaire" : "Membre"
+              }
             </p>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button onClick={() => {
-              // Dispatch event for GlobalCallListener to handle
-              window.dispatchEvent(new CustomEvent('start-outgoing-call', {
-                detail: { targetUser: selectedConv.otherUser }
-              }));
+              window.dispatchEvent(new CustomEvent("start-outgoing-call", { detail: { targetUser: selectedConv.otherUser } }));
             }}
               className="p-2 rounded-xl bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
               title="Appel vocal">
@@ -564,8 +611,8 @@ function ChatPage() {
           </div>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5">
+        {/* Messages — the ONLY scrollable area */}
+        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 space-y-1.5 overscroll-contain">
           {messages.length === 0 && (
             <div className="text-center py-16 text-muted-foreground">
               <MessageCircle className="h-10 w-10 mx-auto mb-2 opacity-15" />
@@ -576,8 +623,8 @@ function ChatPage() {
             const isMe = msg.sender._id === user?.id;
             return (
               <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[82%] ${isMe ? "items-end" : "items-start"} flex flex-col`}>
-                  {/* Text content — hide if message is only an attachment */}
+                <div className={`max-w-[70%] sm:max-w-[50%] md:max-w-[40%] flex flex-col`}>
+                  {/* Text content */}
                   {msg.content && msg.content.trim() !== " " && (!msg.attachments || msg.attachments.length === 0 || msg.content.trim().length > 2) && (
                     <div
                       className={`px-3 py-2 rounded-2xl ${
@@ -591,14 +638,13 @@ function ChatPage() {
                       }}
                       onClick={() => {
                         if (isMe) {
-                          // Long press simulation for mobile
                           const timer = setTimeout(() => showContextMenuFor(msg._id, window.innerWidth / 2, window.innerHeight / 2), 500);
-                          const cancel = () => { clearTimeout(timer); document.removeEventListener('touchend', cancel); };
-                          document.addEventListener('touchend', cancel, { once: true });
+                          const cancel = () => { clearTimeout(timer); document.removeEventListener("touchend", cancel); };
+                          document.addEventListener("touchend", cancel, { once: true });
                         }
                       }}
                     >
-                      <p className="text-[13px] leading-relaxed whitespace-pre-wrap">{msg.content.trim()}</p>
+                      <p className="text-[13px] leading-relaxed break-words whitespace-pre-wrap">{msg.content.trim()}</p>
                       {msg.edited && <span className="text-[9px] opacity-50 italic">modifié</span>}
                     </div>
                   )}
@@ -608,12 +654,25 @@ function ChatPage() {
                     <div key={i} className="mt-1">
                       {att.type === "image" && (
                         <div className="relative group">
-                          <img src={att.url} alt="" className="max-w-[220px] rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
-                            onClick={() => setPreviewImage(att.url)} />
+                          <img src={att.url} alt=""
+                            className="max-w-full sm:max-w-[240px] rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => setMediaPreview({ url: att.url, type: "image", name: att.name })} />
                           <a href={att.url} download={att.name || "image.jpg"}
                             onClick={(e) => e.stopPropagation()}
                             className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            <Download className="h-4 w-4" />
+                          </a>
+                        </div>
+                      )}
+                      {att.type === "video" && (
+                        <div className="relative group rounded-xl overflow-hidden">
+                          <video src={att.url} controls preload="metadata" poster=""
+                            className="max-w-full sm:max-w-[280px] rounded-xl cursor-pointer"
+                            onClick={() => setMediaPreview({ url: att.url, type: "video", name: att.name })} />
+                          <a href={att.url} download={att.name || "video.mp4"}
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Download className="h-4 w-4" />
                           </a>
                         </div>
                       )}
@@ -622,14 +681,14 @@ function ChatPage() {
                       )}
                       {att.type === "document" && (
                         <a href={att.url} download={att.name}
-                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl ${
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl max-w-[260px] ${
                             isMe ? "bg-primary/20 border border-primary/30" : "bg-white/8 border border-white/5"
                           }`}>
-                          <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                          <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center shrink-0">
                             <FileText className="h-5 w-5 text-red-400" />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold truncate">{att.name}</p>
+                            <p className="text-xs font-semibold truncate" title={att.name}>{att.name}</p>
                             <p className="text-[10px] text-muted-foreground">{formatSize(att.size)}</p>
                           </div>
                         </a>
@@ -699,9 +758,9 @@ function ChatPage() {
           );
         })()}
 
-        {/* Edit bar */}
+        {/* Edit bar — fixed above input */}
         {editingMsg && (
-          <div className="sticky bottom-0 z-50 bg-blue-900/30 border-t border-blue-500/30 px-3 py-2">
+          <div className="shrink-0 z-50 bg-blue-900/30 border-t border-blue-500/30 px-3 py-2">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[11px] text-blue-400 font-medium">Modification du message</span>
               <button onClick={() => { setEditingMsg(null); setEditContent(""); }} className="text-white/50 hover:text-white">
@@ -721,8 +780,8 @@ function ChatPage() {
           </div>
         )}
 
-        {/* Input bar */}
-        <div className="sticky bottom-0 bg-background/80 backdrop-blur-xl border-t border-white/10 px-2 py-2">
+        {/* Input bar — fixed at bottom */}
+        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-white/10 px-2 py-2 safe-area-pb">
           {isRecording ? (
             <div className="flex items-center gap-3 px-3 py-2">
               <div className="flex items-center gap-2 flex-1">
@@ -736,17 +795,47 @@ function ChatPage() {
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
-              {/* Attachment buttons */}
+              {/* Image upload */}
               <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
               <button onClick={() => fileInputRef.current?.click()}
-                className="p-2 rounded-xl hover:bg-white/10 transition-colors text-muted-foreground">
-                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                className="p-2 rounded-xl hover:bg-white/10 transition-colors text-muted-foreground shrink-0"
+                title="Envoyer une photo">
+                <ImageIcon className="h-5 w-5" />
               </button>
-              <input type="file" accept=".pdf,.doc,.docx,.txt,.zip" onChange={handleDocUpload} className="hidden" id="doc-input" />
+
+              {/* Video upload */}
+              <input type="file" accept="video/*" ref={videoInputRef} onChange={handleVideoUpload} className="hidden" />
+              <button onClick={() => videoInputRef.current?.click()}
+                className="p-2 rounded-xl hover:bg-white/10 transition-colors text-muted-foreground shrink-0"
+                title="Envoyer une vidéo">
+                <Video className="h-5 w-5" />
+              </button>
+
+              {/* Document upload */}
+              <input type="file" accept=".pdf,.doc,.docx,.txt,.zip,.xls,.xlsx,.ppt,.pptx" onChange={handleDocUpload} className="hidden" id="doc-input" />
               <label htmlFor="doc-input"
-                className="p-2 rounded-xl hover:bg-white/10 transition-colors text-muted-foreground cursor-pointer">
+                className="p-2 rounded-xl hover:bg-white/10 transition-colors text-muted-foreground cursor-pointer shrink-0"
+                title="Envoyer un document">
                 <Paperclip className="h-5 w-5" />
               </label>
+
+              {/* Emoji button */}
+              <div className="relative">
+                <button onClick={() => setShowEmoji(!showEmoji)}
+                  className="p-2 rounded-xl hover:bg-white/10 transition-colors text-muted-foreground shrink-0"
+                  title="Emoji">
+                  <Smile className="h-5 w-5" />
+                </button>
+                {showEmoji && (
+                  <EmojiPicker
+                    onSelect={(emoji) => {
+                      setNewMessage((prev) => prev + emoji);
+                      setShowEmoji(false);
+                    }}
+                    onClose={() => setShowEmoji(false)}
+                  />
+                )}
+              </div>
 
               {/* Text input */}
               <input type="text" value={newMessage}
@@ -759,12 +848,12 @@ function ChatPage() {
               {/* Voice or Send */}
               {newMessage.trim() ? (
                 <button onClick={handleSend} disabled={sending}
-                  className="p-2.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-30 flex-shrink-0">
+                  className="p-2.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-30 shrink-0">
                   <Send className="h-4 w-4" />
                 </button>
               ) : (
                 <button onClick={startRecording}
-                  className="p-2.5 rounded-full bg-white/10 text-muted-foreground hover:bg-white/20 transition-colors flex-shrink-0">
+                  className="p-2.5 rounded-full bg-white/10 text-muted-foreground hover:bg-white/20 transition-colors shrink-0">
                   <Mic className="h-4 w-4" />
                 </button>
               )}
@@ -773,7 +862,8 @@ function ChatPage() {
         </div>
       </div>
 
-
+      {/* Fullscreen media viewer */}
+      <MediaViewer />
     </ProtectedRoute>
   );
 }
@@ -785,11 +875,8 @@ function VoiceMessage({ url, duration, isMe }: { url: string; duration: number |
   const [totalDuration, setTotalDuration] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Use saved duration as primary source (base64 audio returns Infinity for duration)
   useEffect(() => {
-    if (duration && duration > 0) {
-      setTotalDuration(duration);
-    }
+    if (duration && duration > 0) setTotalDuration(duration);
   }, [duration]);
 
   const togglePlay = () => {
@@ -808,13 +895,13 @@ function VoiceMessage({ url, duration, isMe }: { url: string; duration: number |
   const progress = totalDuration > 0 ? (currentTime / totalDuration) * 100 : 0;
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl min-w-[200px] ${
+    <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl min-w-[180px] max-w-[240px] ${
       isMe ? "bg-primary/80 text-primary-foreground" : "bg-white/8 border border-white/5"
     }`}>
-      <button onClick={togglePlay} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+      <button onClick={togglePlay} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0">
         {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
       </button>
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
           <div className="h-full bg-current rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
         </div>

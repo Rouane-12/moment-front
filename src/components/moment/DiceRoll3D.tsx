@@ -30,9 +30,8 @@ const Dice3DScene = lazy(() =>
 
 export function DiceRollOverlay3D({ open, onSettled }: Props) {
   const [phase, setPhase] = useState<"idle" | "spin" | "settled">("idle");
-  const [value, setValue] = useState(1);
+  const [value, setValue] = useState(0);
   const [lines, setLines] = useState(0);
-  const resultRef = useRef(1);
   const onSettledRef = useRef(onSettled);
 
   useEffect(() => {
@@ -44,8 +43,7 @@ export function DiceRollOverlay3D({ open, onSettled }: Props) {
     if (open) {
       setPhase("spin");
       setLines(0);
-      resultRef.current = Math.ceil(Math.random() * 6);
-      setValue(resultRef.current);
+      setValue(0); // No predetermined value — dice physics decides
 
       const timers: NodeJS.Timeout[] = [];
       for (let i = 0; i < SCAN_LINES.length; i++) {
@@ -55,25 +53,25 @@ export function DiceRollOverlay3D({ open, onSettled }: Props) {
     } else {
       setPhase("idle");
       setLines(0);
+      setValue(0);
     }
   }, [open]);
 
-  // Spin → settled
-  useEffect(() => {
-    if (phase !== "spin") return;
-    const t = setTimeout(() => setPhase("settled"), 3200);
-    return () => clearTimeout(t);
-  }, [phase]);
+  // Called by Dice3DScene when the physics simulation detects the top face
+  const handleDiceResult = (detectedValue: number) => {
+    setValue(detectedValue);
+    setPhase("settled");
+  };
 
-  // Settled → onSettled
+  // Settled → onSettled (with delay for visual effect)
   useEffect(() => {
-    if (phase !== "settled") return;
-    const t = setTimeout(() => onSettledRef.current(resultRef.current), 1800);
+    if (phase !== "settled" || value === 0) return;
+    const t = setTimeout(() => onSettledRef.current(value), 1800);
     return () => clearTimeout(t);
-  }, [phase]);
+  }, [phase, value]);
 
   if (!open) return null;
-  const theme = ROLL_THEMES[value] ?? ROLL_THEMES[1]!;
+  const theme = value > 0 ? (ROLL_THEMES[value] ?? ROLL_THEMES[1]!) : null;
 
   return (
     <div className="fixed inset-0 z-[90] flex flex-col items-center justify-center overflow-y-auto bg-gradient-to-b from-[#1a0e04] via-[#120a02] to-[#0a0600]">
@@ -96,7 +94,7 @@ export function DiceRollOverlay3D({ open, onSettled }: Props) {
           Le dé décide de la direction
         </p>
 
-        {/* 3D Canvas — lazy loaded, client only */}
+        {/* 3D Canvas */}
         <div className="relative">
           {phase === "spin" && (
             <span className="absolute -inset-4 rounded-full border-2 border-[#F5A623]/20 animate-pulse-ring" />
@@ -111,13 +109,13 @@ export function DiceRollOverlay3D({ open, onSettled }: Props) {
             >
               <Dice3DScene
                 spinning={phase === "spin"}
-                targetValue={resultRef.current}
+                onResult={handleDiceResult}
               />
             </Suspense>
           </ClientOnly>
         </div>
 
-        {phase === "settled" ? (
+        {phase === "settled" && theme ? (
           <div className="animate-rise space-y-3">
             <p className="text-display text-6xl text-[#F5A623] font-black">{value}</p>
             <div className="h-px w-40 bg-gradient-to-r from-transparent via-[#F5A623]/40 to-transparent mx-auto" />
@@ -129,7 +127,7 @@ export function DiceRollOverlay3D({ open, onSettled }: Props) {
         ) : (
           <div className="space-y-2">
             <p className="text-display text-xl md:text-2xl uppercase text-white/30 tracking-widest">
-              Ça tourne...
+              {phase === "spin" ? "Ça tourne..." : "Préparation..."}
             </p>
             <div className="flex justify-center gap-1.5">
               {[0, 1, 2].map((i) => (

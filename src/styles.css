@@ -380,3 +380,8 @@ select,
   -moz-appearance: none;
 }
 
+/* ---------- Safe area padding for mobile notch ---------- */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
