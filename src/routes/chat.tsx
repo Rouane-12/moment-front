@@ -578,8 +578,8 @@ function ChatPage() {
   // ===== MESSAGE VIEW =====
   return (
     <ProtectedRoute>
-      {/* Full screen chat — no scrolling outside, only messages scroll */}
-      <div className="grain h-[100dvh] flex flex-col overflow-hidden">
+      {/* Full screen chat — fixed to viewport, escapes DashboardLayout padding */}
+      <div className="grain fixed inset-0 z-[60] flex flex-col overflow-hidden lg:pl-64">
         {/* Header — fixed at top */}
         <div className="shrink-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/10 px-3 py-2 flex items-center gap-2.5">
           <button onClick={() => setSelectedConv(null)} className="p-2 rounded-xl hover:bg-white/10 transition-colors">
