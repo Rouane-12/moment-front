@@ -1,6 +1,25 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Component, type ReactNode } from "react";
 import { Phone, PhoneOff, PhoneIncoming } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+
+/* ── Error Boundary: catches any crash in call overlay, renders fallback ── */
+class CallErrorBoundary extends Component<{ children: ReactNode; onForceClose: () => void }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(err: any) { console.error("📞 Call overlay crashed:", err); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center">
+          <p className="text-white text-sm mb-4">L'appel a rencontré une erreur</p>
+          <button onClick={this.props.onForceClose}
+            className="px-6 py-2.5 rounded-full bg-red-500 text-white text-sm font-medium">Fermer</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 type IncomingCall = {
   offer: any;
@@ -241,15 +260,22 @@ export function GlobalCallListener() {
 
   if (phase === "active" && callPeer) {
     return (
-      <ActiveCallOverlay
-        key={`call-${callPeer._id}-${phase}`}
-        peer={callPeer}
-        socket={socketRef.current}
-        user={user}
-        direction={callDirection}
-        incomingCall={callDirection === "incoming" ? incomingCall : null}
-        onEnd={endCall}
-      />
+      <CallErrorBoundary onForceClose={() => {
+        outgoingCallLock = false;
+        phaseRef.current = "none";
+        callEndedRef.current = true;
+        setRenderState({ phase: "none", incomingCall: null, callPeer: null, callDirection: "outgoing" });
+      }}>
+        <ActiveCallOverlay
+          key={`call-${callPeer._id}-${phase}`}
+          peer={callPeer}
+          socket={socketRef.current}
+          user={user}
+          direction={callDirection}
+          incomingCall={callDirection === "incoming" ? incomingCall : null}
+          onEnd={endCall}
+        />
+      </CallErrorBoundary>
     );
   }
 
@@ -533,6 +559,18 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
       timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [status]);
+
+  // Connection timeout: auto-end after 30s if still connecting
+  useEffect(() => {
+    if (status === "connecting") {
+      const timeout = setTimeout(() => {
+        console.log("📞 Call connection timeout — ending");
+        cleanup();
+        onEndRef.current();
+      }, 30000);
+      return () => clearTimeout(timeout);
+    }
   }, [status]);
 
   const endCall = useCallback(() => {

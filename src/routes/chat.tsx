@@ -159,11 +159,12 @@ function ChatPage() {
   // === SEND TEXT MESSAGE ===
   const handleSend = async () => {
     if (!newMessage.trim() || !selectedConv) return;
+    const text = newMessage.trim();
+    setNewMessage("");
     setSending(true);
     try {
-      await api.chat.send(selectedConv.otherUser._id, newMessage.trim());
-      setNewMessage("");
-    } catch (e) { console.error(e); }
+      await api.chat.send(selectedConv.otherUser._id, text);
+    } catch (e) { console.error(e); setNewMessage(text); }
     finally { setSending(false); }
   };
 
@@ -224,9 +225,10 @@ function ChatPage() {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedConv) return;
-    setSending(true);
     try {
+      setSending(true);
       const base64 = await compressImage(file);
+      setSending(true);
       await api.chat.send(selectedConv.otherUser._id, " ", {
         attachments: [{ type: "image", url: base64, name: file.name, size: file.size, mimeType: file.type }],
       });
@@ -803,7 +805,7 @@ function ChatPage() {
         )}
 
         {/* ── INPUT BAR (sticky, NEVER scrolls) ── */}
-        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-white/10 px-2 py-2 safe-area-pb z-10">
+        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-white/10 px-2 pt-2 pb-4 sm:pb-3 safe-area-pb z-10">
           {isRecording ? (
             <div className="flex items-center gap-3 px-3 py-2">
               <div className="flex items-center gap-2 flex-1">

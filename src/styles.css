@@ -382,7 +382,7 @@ select,
 
 /* ---------- Safe area padding for mobile notch ---------- */
 .safe-area-pb {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
 }
 
 /* ---------- Hide scrollbar ---------- */
