@@ -13,16 +13,21 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="h-screen bg-[#0a0a0a] overflow-hidden">
+    <div className="h-screen bg-[#0a0a0a] overflow-hidden flex flex-col">
       <DashboardSidebar />
-      {/* Chat: relative + no scroll (child uses absolute inset-0). Others: normal scrollable */}
-      <div className={`h-full lg:pl-64 transition-all duration-300 ${isChat ? "relative" : "overflow-y-auto"}`}>
-        {isChat ? (
-          children
-        ) : (
-          <div className="pt-16 lg:pt-8 px-4 sm:px-6 lg:px-8 pb-8">{children}</div>
-        )}
-      </div>
+      {isChat ? (
+        /* Chat: takes full remaining height, no padding, no scroll on wrapper */
+        <div className="flex-1 min-h-0 overflow-hidden lg:pl-64">
+          {children}
+        </div>
+      ) : (
+        /* Other pages: scrollable with padding */
+        <div className="flex-1 min-h-0 overflow-y-auto lg:pl-64">
+          <div className="pt-16 lg:pt-8 px-4 sm:px-6 lg:px-8 pb-8">
+            {children}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
