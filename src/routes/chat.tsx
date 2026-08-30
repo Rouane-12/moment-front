@@ -453,7 +453,7 @@ function ChatPage() {
   if (!selectedConv) {
     return (
       <ProtectedRoute>
-        <div className="grain h-full flex flex-col overflow-hidden">            <div className="px-4 sm:px-6 lg:px-8 py-5 pb-24 overflow-y-auto flex-1">
+        <div className="grain flex-1 min-h-0 flex flex-col overflow-hidden">            <div className="px-4 sm:px-6 lg:px-8 py-5 pb-24 overflow-y-auto flex-1">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="text-xl font-bold">Messages</h1>
@@ -585,7 +585,7 @@ function ChatPage() {
   // Header and input are position:sticky within this container — they NEVER scroll.
   return (
     <ProtectedRoute>
-      <div className="grain h-full flex flex-col overflow-hidden bg-background">
+      <div className="grain flex-1 min-h-0 flex flex-col overflow-hidden bg-background">
         {/* ── HEADER (sticky, never scrolls) ── */}
         <div className="shrink-0 bg-background/80 backdrop-blur-xl border-b border-white/10 px-3 py-2.5 flex items-center gap-2.5 z-10">
           <button onClick={() => setSelectedConv(null)} className="p-2 rounded-xl hover:bg-white/10 transition-colors">

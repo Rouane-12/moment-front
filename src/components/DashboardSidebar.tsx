@@ -54,7 +54,7 @@ export function DashboardSidebar() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const renderItems = (items: typeof menuItems) =>
+  const renderItems = (items: typeof menuItems, isMobile = false) =>
     items.map((item) => {
       const Icon = item.icon;
       const isActive =
@@ -65,27 +65,29 @@ export function DashboardSidebar() {
         <Link
           key={item.to}
           to={item.to}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+          className={`flex items-center gap-3.5 ${isMobile ? 'px-4 py-3.5' : 'px-3 py-2.5'} rounded-xl transition-all duration-200 ${
             isActive
               ? "bg-primary text-white shadow-lg shadow-primary/20"
               : "text-muted-foreground hover:bg-white/5 hover:text-white"
           }`}
         >
-          <Icon className="h-5 w-5 flex-shrink-0" />
-          <span className="text-sm font-medium truncate">{item.label}</span>
+          <Icon className={`${isMobile ? 'h-5.5 w-5.5' : 'h-5 w-5'} flex-shrink-0`} />
+          <span className={`${isMobile ? 'text-[15px]' : 'text-sm'} font-medium whitespace-nowrap`}>{item.label}</span>
         </Link>
       );
     });
 
   return (
     <>
-      {/* Mobile hamburger */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="fixed top-4 left-4 z-[60] lg:hidden p-2.5 rounded-xl bg-white/10 backdrop-blur-xl border border-white/10 hover:bg-white/15 transition-colors"
-      >
-        <Menu className="h-5 w-5" />
-      </button>
+      {/* Mobile hamburger — hidden on /chat page */}
+      {location.pathname !== "/chat" && (
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="fixed top-4 left-4 z-[60] lg:hidden p-2.5 rounded-xl bg-white/10 backdrop-blur-xl border border-white/10 hover:bg-white/15 transition-colors"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      )}
 
       {/* Mobile overlay */}
       {mobileOpen && (
@@ -97,7 +99,7 @@ export function DashboardSidebar() {
 
       {/* Sidebar — always expanded, no collapse */}
       <aside
-        className={`fixed left-0 top-0 z-[80] h-screen w-64 bg-[#0a0a0a] border-r border-white/10 transition-transform duration-300
+        className={`fixed left-0 top-0 z-[80] h-[100dvh] h-screen w-72 lg:w-64 bg-[#0a0a0a] border-r border-white/10 transition-transform duration-300
           ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
@@ -116,9 +118,10 @@ export function DashboardSidebar() {
           </div>
 
           {/* Nav */}
-          <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-            {renderItems(menuItems)}
+          <nav className="flex-1 overflow-y-auto py-5 px-3 space-y-1.5">
+            {renderItems(menuItems, true)}
           </nav>
+          <div className="flex-1" />
 
           {/* User + logout */}
           <div className="border-t border-white/10 p-3 space-y-1 flex-shrink-0">
