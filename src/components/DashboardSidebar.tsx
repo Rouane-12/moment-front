@@ -97,9 +97,10 @@ export function DashboardSidebar() {
 
       {/* Sidebar — always expanded, no collapse */}
       <aside
-        className={`fixed left-0 top-0 z-[80] h-screen w-72 lg:w-64 bg-[#0a0a0a] border-r border-white/10 transition-transform duration-300
+        className={`fixed left-0 top-0 z-[80] w-72 lg:w-64 bg-[#0a0a0a] border-r border-white/10 transition-transform duration-300
           ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
+        style={{ height: '100dvh', height: '100svh' }}
       >
         <div className="flex h-full flex-col overflow-hidden">
           {/* Header — FIXED, never scrolls */}
@@ -120,15 +121,14 @@ export function DashboardSidebar() {
             {renderItems(menuItems, true)}
           </nav>
 
-          {/* User + logout — FIXED at bottom, never scrolls */}
-          <div className="border-t border-white/10 p-3 space-y-1 flex-shrink-0">
+          {/* User + logout — FIXED at bottom, never scrolls, compact */}
+          <div className="border-t border-white/10 px-3 py-2.5 flex-shrink-0">
             {user && (
-              <div className="px-3 py-2 text-sm text-muted-foreground">
-                <div className="font-medium text-white truncate">
+              <div className="px-3 py-1.5 mb-1 text-sm text-muted-foreground">
+                <div className="font-medium text-white truncate text-sm">
                   {user.firstName} {user.lastName}
                 </div>
-                <div className="text-xs truncate">{user.email}</div>
-                <div className="text-xs text-primary capitalize">{user.role?.replace("_", " ")}</div>
+                <div className="text-xs truncate opacity-70">{user.email}</div>
               </div>
             )}
             <button
