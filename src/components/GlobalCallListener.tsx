@@ -113,7 +113,7 @@ export function GlobalCallListener() {
       reconnectionDelay: 1000,
     });
     socketRef.current = socket;
-    parentSocketRef = socket; // Expose for overlay
+    parentSocketRef = socket;
 
     socket.on("connect", () => console.log("📞 Socket connected:", socket.id));
     socket.on("socket-authenticated", (d: any) => {
@@ -122,7 +122,7 @@ export function GlobalCallListener() {
     });
     socket.on("disconnect", (reason) => console.log("📞 Socket disconnected:", reason));
 
-    // === INCOMING CALL — parent handles this ===
+    // === INCOMING CALL ===
     socket.on("call-init", (data: any) => {
       const dedupeKey = `${data.from?._id}-${Math.floor((data.timestamp || 0) / 2000)}`;
       console.log("📞 call-init dedupeKey:", dedupeKey, "phase:", phaseRef.current);
@@ -157,7 +157,7 @@ export function GlobalCallListener() {
       phaseRef.current = "ringing";
     });
 
-    // === CALL ENDED — parent handles this ===
+    // === CALL ENDED ===
     socket.on("call-ended", (data: any) => {
       const callId = data?.callId || "unknown";
       const dedupeKey = `ended-${callId}-${data?.from || "x"}`;
@@ -173,9 +173,6 @@ export function GlobalCallListener() {
       setRenderState({ phase: "none", incomingCall: null, callPeer: null, callDirection: "outgoing" });
       phaseRef.current = "none";
     });
-
-    // NOTE: call-answer and call-ice-candidate are NOT handled here
-    // The ActiveCallOverlay listens for them directly on the socket
 
     return () => {
       parentSocketRef = null;
@@ -400,13 +397,12 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
   const startedRef = useRef(false);
   const unmountedRef = useRef(false);
 
+  // LOCAL buffers — catch ICE/answer that arrive BEFORE peer is ready
+  const iceBuffer = useRef<any[]>([]);
+  const answerBuffer = useRef<any[]>([]);
+
   const onEndRef = useRef(onEnd);
   onEndRef.current = onEnd;
-  const peerIdRef = useRef(peer._id);
-  peerIdRef.current = peer._id;
-
-  const socketRef = useRef(socket);
-  socketRef.current = socket;
 
   const cleanup = useCallback(() => {
     if (unmountedRef.current) return;
@@ -420,43 +416,59 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
       localStreamRef.current.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
     }
+    iceBuffer.current = [];
+    answerBuffer.current = [];
   }, []);
 
-  // === LISTEN for call-answer and call-ice-candidate DIRECTLY on socket ===
-  // This eliminates the buffering race condition
+  // Drain local buffers — called after peer setup and periodically
+  const drainBuffer = useCallback(async () => {
+    if (unmountedRef.current) return;
+    const pc = peerRef.current;
+    if (!pc) return;
+
+    // Apply buffered ICE candidates
+    while (iceBuffer.current.length > 0 && peerRef.current && !unmountedRef.current) {
+      const data = iceBuffer.current.shift()!;
+      try {
+        await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+        console.log("📞 Applied buffered ICE candidate");
+      } catch (e) { console.error("📞 Buffered ICE error:", e); }
+    }
+
+    // Apply buffered answer (for caller — receiver sends answer)
+    while (answerBuffer.current.length > 0 && peerRef.current && !unmountedRef.current) {
+      const data = answerBuffer.current.shift()!;
+      try {
+        await peerRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
+        console.log("📞 Applied buffered call-answer → connected!");
+        if (!unmountedRef.current) setStatus("connected");
+      } catch (e) { console.error("📞 Buffered answer error:", e); }
+    }
+  }, []);
+
+  // === LISTEN for call-answer and call-ice-candidate ===
+  // Always buffer — drainBuffer() processes them after peer is ready
   useEffect(() => {
     const s = parentSocketRef;
     if (!s) return;
 
-    const handleAnswer = async (data: any) => {
+    const handleAnswer = (data: any) => {
+      console.log("📞 call-answer received, peer ready:", !!peerRef.current);
       if (unmountedRef.current) return;
-      const pc = peerRef.current;
-      if (!pc) {
-        console.error("📞 call-answer received but no peer connection yet");
-        return;
-      }
       if (data.answer) {
-        try {
-          console.log("📞 call-answer received — setting remote description");
-          await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-          console.log("📞 Remote description set → connected!");
-          if (!unmountedRef.current) setStatus("connected");
-        } catch (e) { console.error("📞 call-answer error:", e); }
+        answerBuffer.current.push(data);
+        // Try to drain immediately
+        drainBuffer();
       }
     };
 
-    const handleIce = async (data: any) => {
+    const handleIce = (data: any) => {
       if (unmountedRef.current) return;
-      const pc = peerRef.current;
-      if (!pc) {
-        console.log("📞 ICE candidate received but no peer yet, skipping");
-        return;
-      }
       if (data.candidate) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-          console.log("📞 ICE candidate applied from", data.from);
-        } catch (e) { console.error("📞 ICE candidate error:", e); }
+        iceBuffer.current.push(data);
+        console.log("📞 ICE candidate queued, peer ready:", !!peerRef.current);
+        // Try to drain immediately
+        drainBuffer();
       }
     };
 
@@ -468,20 +480,34 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
       s.off("call-answer", handleAnswer);
       s.off("call-ice-candidate", handleIce);
     };
-  }, [peer._id]);
+  }, [peer._id, drainBuffer]);
 
+  // Periodic drain — catches any missed drainBuffer() calls
+  useEffect(() => {
+    if (status !== "connected") {
+      const interval = setInterval(() => {
+        if (!unmountedRef.current && peerRef.current) drainBuffer();
+      }, 500);
+      return () => clearInterval(interval);
+    }
+  }, [status, drainBuffer]);
+
+  // === SETUP PEER CONNECTION ===
   const setupPeer = useCallback((targetId: string, stream: MediaStream) => {
     const pc = new RTCPeerConnection(ICE_SERVERS);
     peerRef.current = pc;
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
     pc.onicecandidate = (event) => {
-      if (event.candidate && !unmountedRef.current && socketRef.current?.connected) {
-        socketRef.current.emit("call-ice-candidate", {
-          to: targetId,
-          candidate: event.candidate.toJSON(),
-          from: user?.id,
-        });
+      if (event.candidate && !unmountedRef.current) {
+        const s = parentSocketRef;
+        if (s?.connected) {
+          s.emit("call-ice-candidate", {
+            to: targetId,
+            candidate: event.candidate.toJSON(),
+            from: user?.id,
+          });
+        }
       }
     };
     pc.ontrack = (event) => {
@@ -500,8 +526,14 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
         onEndRef.current(false);
       }
     };
+
+    // Drain any candidates that arrived before peer was ready
+    setTimeout(() => drainBuffer(), 100);
+    setTimeout(() => drainBuffer(), 500);
+    setTimeout(() => drainBuffer(), 1500);
+
     return pc;
-  }, [socket]);
+  }, [user?.id, cleanup, drainBuffer]);
 
   // OUTGOING: create offer
   useEffect(() => {
@@ -520,10 +552,11 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        // Wait a tiny bit for ICE gathering to start
-        await new Promise((r) => setTimeout(r, 200));
+        // Wait for ICE gathering to start
+        await new Promise((r) => setTimeout(r, 300));
 
-        if (!socket.connected) {
+        const s = parentSocketRef;
+        if (!s?.connected) {
           console.error("📞 Socket not connected, aborting");
           cleanup();
           onEndRef.current(false);
@@ -531,15 +564,13 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
         }
 
         console.log("📞 Emitting call-init to:", peer._id, "callId:", outgoingCallId);
-        socket.emit("call-init", {
+        s.emit("call-init", {
           to: peer._id,
           offer,
           from: { _id: user.id, firstName: user.firstName, lastName: user.lastName },
           callId: outgoingCallId,
           timestamp: Date.now(),
         });
-
-        // No more drainBuffer needed — overlay listens directly on socket
       } catch (e) {
         console.error("📞 Outgoing failed:", e);
         onEndRef.current(false);
@@ -568,17 +599,16 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
 
-        // Wait for ICE candidates to be generated
-        await new Promise((r) => setTimeout(r, 300));
+        // Wait for ICE candidates to generate
+        await new Promise((r) => setTimeout(r, 500));
 
+        const s = parentSocketRef;
         console.log("📞 Emitting call-answer to:", incomingCall.from._id);
-        socket.emit("call-answer", {
+        s?.emit("call-answer", {
           to: incomingCall.from._id,
           answer,
           from: user?.id,
         });
-
-        // No more drainBuffer needed — overlay listens directly on socket
       } catch (e) {
         console.error("📞 Incoming failed:", e);
         onEndRef.current(false);
@@ -599,7 +629,7 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
     return () => { if (timerRef.current) clearInterval(timerRef.current); timerRef.current = null; };
   }, [status]);
 
-  // Connection timeout — 25s
+  // Connection timeout — 30s
   useEffect(() => {
     if (status === "connecting") {
       const timeout = setTimeout(() => {
@@ -608,7 +638,7 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
           cleanup();
           onEndRef.current(false);
         }
-      }, 25000);
+      }, 30000);
       return () => clearTimeout(timeout);
     }
   }, [status]);
