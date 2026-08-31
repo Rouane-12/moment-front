@@ -23,7 +23,7 @@ type VenueRequest = {
   paymentAmount: number;
   partnerId: {
     firstName: string;
-    lastName: string;
+    lastName: string;   
     email: string;  
     phone: string;
   };
