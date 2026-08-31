@@ -420,22 +420,13 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
     answerBuffer.current = [];
   }, []);
 
-  // Drain local buffers — called after peer setup and periodically
+  // Drain local buffers — ANSWER FIRST, then ICE
   const drainBuffer = useCallback(async () => {
     if (unmountedRef.current) return;
     const pc = peerRef.current;
     if (!pc) return;
 
-    // Apply buffered ICE candidates
-    while (iceBuffer.current.length > 0 && peerRef.current && !unmountedRef.current) {
-      const data = iceBuffer.current.shift()!;
-      try {
-        await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-        console.log("📞 Applied buffered ICE candidate");
-      } catch (e) { console.error("📞 Buffered ICE error:", e); }
-    }
-
-    // Apply buffered answer (for caller — receiver sends answer)
+    // 1) Apply buffered answer FIRST — sets remoteDescription, required for addIceCandidate
     while (answerBuffer.current.length > 0 && peerRef.current && !unmountedRef.current) {
       const data = answerBuffer.current.shift()!;
       try {
@@ -443,6 +434,23 @@ function ActiveCallOverlay({ peer, socket, user, direction, incomingCall, onEnd 
         console.log("📞 Applied buffered call-answer → connected!");
         if (!unmountedRef.current) setStatus("connected");
       } catch (e) { console.error("📞 Buffered answer error:", e); }
+    }
+
+    // 2) Apply buffered ICE candidates — only after remoteDescription is set
+    while (iceBuffer.current.length > 0 && peerRef.current && !unmountedRef.current) {
+      const data = iceBuffer.current.shift()!;
+      try {
+        await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+        console.log("📞 Applied buffered ICE candidate");
+      } catch (e) {
+        // If remote description not set yet, re-queue and try later
+        if (e instanceof DOMException && e.name === "InvalidStateError") {
+          iceBuffer.current.push(data);
+          console.log("📞 ICE re-queued (remote desc not ready yet)");
+          break; // Stop processing — wait for answer
+        }
+        console.error("📞 Buffered ICE error:", e);
+      }
     }
   }, []);
 
