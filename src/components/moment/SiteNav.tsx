@@ -98,12 +98,21 @@ export function SiteNav() {
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
-          {/* Menu Panel */}
-          <nav
-            className="absolute top-14 sm:top-16 left-0 right-0 bg-[#111] border-b border-border shadow-2xl animate-in"
+          {/* Menu Panel */}              <nav
+            className="absolute top-14 sm:top-16 left-0 right-0 bg-[#111] border-b border-border shadow-2xl animate-in max-h-[80vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="max-w-6xl mx-auto px-5 py-5 space-y-1">
+              {/* Close button */}
+              <button
+                onClick={() => setMobileOpen(false)}
+                className="absolute top-3 right-3 p-2 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                <svg className="w-5 h-5 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                  <path d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
               {links.map((l) => (
                 <Link
                   key={l.to}

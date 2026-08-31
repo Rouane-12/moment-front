@@ -162,6 +162,9 @@ function ChatPage() {
     const text = newMessage.trim();
     setNewMessage("");
     setSending(true);
+    // Reset textarea height
+    const ta = document.querySelector('textarea[placeholder="Écrire..."]') as HTMLTextAreaElement | null;
+    if (ta) ta.style.height = 'auto';
     try {
       await api.chat.send(selectedConv.otherUser._id, text);
     } catch (e) { console.error(e); setNewMessage(text); }
@@ -858,11 +861,26 @@ function ChatPage() {
                 )}
               </div>
 
-              <input type="text" value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+              <textarea value={newMessage}
+                onChange={(e) => {
+                  setNewMessage(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                    setTimeout(() => {
+                      const ta = e.target as HTMLTextAreaElement;
+                      if (ta) { ta.style.height = 'auto'; }
+                    }, 0);
+                  }
+                }}
                 placeholder="Écrire..."
-                className="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:border-primary text-sm min-w-0"
+                rows={1}
+                className="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:border-primary text-sm min-w-0 resize-none leading-relaxed overflow-y-auto"
+                style={{ maxHeight: '120px' }}
                 disabled={sending} />
 
               {newMessage.trim() ? (

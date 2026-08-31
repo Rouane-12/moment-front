@@ -101,8 +101,8 @@ export function DashboardSidebar() {
           ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
-        <div className="flex h-full flex-col">
-          {/* Header */}
+        <div className="flex h-full flex-col overflow-hidden">
+          {/* Header — FIXED, never scrolls */}
           <div className="flex h-16 items-center justify-between border-b border-white/10 px-4 flex-shrink-0">
             <Link to="/" className="text-display text-lg tracking-[0.3em] uppercase">
               Moment
@@ -115,13 +115,12 @@ export function DashboardSidebar() {
             </button>
           </div>
 
-          {/* Nav */}
-          <nav className="flex-1 overflow-y-auto py-5 px-3 space-y-1.5">
+          {/* Nav — scrollable, takes remaining space but stops before user+logout */}
+          <nav className="flex-1 min-h-0 overflow-y-auto py-5 px-3 space-y-1.5 scrollbar-hide">
             {renderItems(menuItems, true)}
           </nav>
-          <div className="flex-1" />
 
-          {/* User + logout */}
+          {/* User + logout — FIXED at bottom, never scrolls */}
           <div className="border-t border-white/10 p-3 space-y-1 flex-shrink-0">
             {user && (
               <div className="px-3 py-2 text-sm text-muted-foreground">

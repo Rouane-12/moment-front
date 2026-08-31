@@ -112,14 +112,12 @@
 
   html {
     height: 100%;
-    overflow: hidden;
     scroll-behavior: smooth;
   }
 
   body {
     height: 100%;
     margin: 0;
-    overflow: hidden;
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
