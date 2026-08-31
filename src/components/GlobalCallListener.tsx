@@ -98,7 +98,7 @@ export function GlobalCallListener() {
 
     if (!peerEndedRef.current && s?.connected && peer) {
       console.log("📞 endCall — emitting call-end to:", peer._id, "sendMissed:", sendMissed);
-      s.emit("call-end", { to: peer._id, callId: outgoingCallId });
+      s.emit("call-end", { to: peer._id, callId: outgoingCallId, from: user?.id });
     } else {
       console.log("📞 endCall — NOT emitting:", {
         peerEnded: peerEndedRef.current,
@@ -162,26 +162,38 @@ export function GlobalCallListener() {
 
     // === INCOMING CALL ===
     socket.on("call-init", (data: any) => {
+      // CRITICAL: Ignore our own call-init (prevents self-loop bug)
+      if (data.from?._id === user?.id) {
+        console.log("📞 call-init from SELF — ignoring (would cause loop)");
+        return;
+      }
+
       const dedupeKey = `${data.from?._id}-${Math.floor(
         (data.timestamp || 0) / 2000
       )}`;
       console.log(
-        "📞 call-init dedupeKey:",
+        "📞 INCOMING call-init from:",
+        data.from?.firstName,
+        "dedupeKey:",
         dedupeKey,
         "phase:",
         phaseRef.current
       );
 
-      if (processedCallInits.has(dedupeKey)) return;
+      if (processedCallInits.has(dedupeKey)) {
+        console.log("📞 call-init DUPLICATE — ignoring");
+        return;
+      }
       processedCallInits.add(dedupeKey);
       cleanupDedup();
 
       if (phaseRef.current !== "none") {
-        console.log("📞 IGNORED — already", phaseRef.current);
+        console.log("📞 call-init IGNORED — already", phaseRef.current, "sending busy");
         if (socket.connected && data.from?._id) {
           socket.emit("call-end", {
             to: data.from._id,
             callId: data.callId || "busy",
+            from: user?.id,
           });
         }
         return;
@@ -210,9 +222,18 @@ export function GlobalCallListener() {
 
     // === CALL ENDED ===
     socket.on("call-ended", (data: any) => {
+      // Ignore call-ended from ourselves (prevents self-loop)
+      if (data.from === user?.id) {
+        console.log("📞 call-ended from SELF — ignoring");
+        return;
+      }
+
       const callId = data?.callId || "unknown";
       const dedupeKey = `ended-${callId}-${data?.from || "x"}`;
-      if (processedCallInits.has(dedupeKey)) return;
+      if (processedCallInits.has(dedupeKey)) {
+        console.log("📞 call-ended DUPLICATE — ignoring");
+        return;
+      }
       processedCallInits.add(dedupeKey);
       cleanupDedup();
 
@@ -220,7 +241,9 @@ export function GlobalCallListener() {
         "📞 call-ended received:",
         callId,
         "phase:",
-        phaseRef.current
+        phaseRef.current,
+        "from:",
+        data.from
       );
       lastCallEndTime = Date.now();
       callEndedRef.current = true;
@@ -729,8 +752,13 @@ function ActiveCallOverlay({
           setStatus("connected");
           statusRef.current = "connected";
         }
-        if (state === "failed" || state === "closed") {
-          console.log("📞 WebRTC failed → ending call");
+        if (state === "failed") {
+          console.log("📞 WebRTC failed — waiting for timeout or recovery");
+          // Don't end call immediately — let timeout handle it
+          // On mobile, connection state can temporarily go "failed" then recover
+        }
+        if (state === "closed") {
+          console.log("📞 WebRTC closed → ending call");
           cleanup();
           onEndRef.current(false);
         }
