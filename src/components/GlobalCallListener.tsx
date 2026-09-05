@@ -42,6 +42,9 @@ const ICE_SERVERS = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun3.l.google.com:19302" },
+    { urls: "stun:stun4.l.google.com:19302" },
   ],
 };
 
@@ -125,16 +128,30 @@ function GlobalCallListenerInner() {
     // Play ringtone for caller when outgoing call starts
     if (renderState.phase === "active" && renderState.callDirection === "outgoing") {
       if (!callerRingtoneRef.current) {
+        // Try to load the ringtone file
         callerRingtoneRef.current = new Audio("/sounds/caller-ringtone.mp3");
         callerRingtoneRef.current.loop = true;
         callerRingtoneRef.current.volume = 0.5;
+        
+        // Handle load errors
+        callerRingtoneRef.current.addEventListener('error', (e) => {
+          console.error("📞 Failed to load caller ringtone:", e);
+          // Fallback to Web Audio API if file fails
+          createFallbackRingtone();
+        });
       }
-      callerRingtoneRef.current.play().catch(console.error);
+      
+      // Try to play
+      callerRingtoneRef.current.play().catch((error) => {
+        console.error("📞 Failed to play caller ringtone:", error);
+        createFallbackRingtone();
+      });
     } else {
       if (callerRingtoneRef.current) {
         callerRingtoneRef.current.pause();
         callerRingtoneRef.current.currentTime = 0;
       }
+      stopFallbackRingtone();
     }
 
     return () => {
@@ -142,8 +159,60 @@ function GlobalCallListenerInner() {
         callerRingtoneRef.current.pause();
         callerRingtoneRef.current.currentTime = 0;
       }
+      stopFallbackRingtone();
     };
   }, [renderState.phase, renderState.callDirection]);
+
+  // Fallback ringtone using Web Audio API
+  const fallbackAudioCtxRef = useRef<AudioContext | null>(null);
+  const fallbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const createFallbackRingtone = useCallback(() => {
+    if (fallbackAudioCtxRef.current) return;
+    
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      fallbackAudioCtxRef.current = ctx;
+      
+      const playTone = () => {
+        if (!fallbackAudioCtxRef.current) return;
+        try {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = 440;
+          osc.type = "sine";
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.5);
+        } catch (e) {
+          console.error("📞 Fallback ringtone error:", e);
+        }
+      };
+      
+      playTone();
+      fallbackIntervalRef.current = setInterval(playTone, 1000);
+    } catch (e) {
+      console.error("📞 Failed to create fallback ringtone:", e);
+    }
+  }, []);
+
+  const stopFallbackRingtone = useCallback(() => {
+    if (fallbackIntervalRef.current) {
+      clearInterval(fallbackIntervalRef.current);
+      fallbackIntervalRef.current = null;
+    }
+    if (fallbackAudioCtxRef.current) {
+      try {
+        fallbackAudioCtxRef.current.close();
+      } catch (e) {
+        console.error("📞 Error closing fallback audio context:", e);
+      }
+      fallbackAudioCtxRef.current = null;
+    }
+  }, []);
 
   const endCall = useCallback((sendMissed = false) => {
     if (callEndedRef.current) {
@@ -207,19 +276,21 @@ function GlobalCallListenerInner() {
       import.meta.env["VITE_API_URL"] || "http://localhost:5200",
       {
         auth: { token },
-        transports: ["polling", "websocket"],
+        transports: ["websocket", "polling"],
         reconnection: true,
         reconnectionDelay: 1000,
-        reconnectionAttempts: 5,
+        reconnectionAttempts: 10,
+        reconnectionDelayMax: 5000,
         forceNew: false,
+        timeout: 10000,
       }
     );
     socketRef.current = socket;
     parentSocketRef = socket;
 
-    socket.on("connect", () =>
-      console.log("📞 Socket connected:", socket.id)
-    );
+    socket.on("connect", () => {
+      console.log("📞 Socket connected:", socket.id, "transport:", socket.io.engine.transport.name);
+    });
     socket.on("socket-authenticated", (d: any) => {
       (socket as any).userId = d.userId;
       console.log("📞 Socket auth:", d.userId);
@@ -227,6 +298,9 @@ function GlobalCallListenerInner() {
     socket.on("disconnect", (reason) =>
       console.log("📞 Socket disconnected:", reason)
     );
+    socket.on("connect_error", (error) => {
+      console.error("📞 Socket connection error:", error);
+    });
 
     // === PARENT-LEVEL BUFFER for call-answer and call-ice-candidate ===
     // These arrive BEFORE the overlay mounts (race condition fix)
@@ -548,30 +622,48 @@ function IncomingCallUI({
   onAccept: () => void;
   onReject: () => void;
 }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stoppedRef = useRef(false);
 
   useEffect(() => {
     stoppedRef.current = false;
+    let ctx: AudioContext | null = null;
 
-    // Use native ringtone sound file instead of Web Audio API
     try {
-      if (!audioRef.current) {
-        audioRef.current = new Audio("/sounds/incoming-ringtone.mp3");
-        audioRef.current.loop = true;
-        audioRef.current.volume = 0.7;
-      }
-      audioRef.current.play().catch(console.error);
-    } catch (error) {
-      console.error("📞 Failed to play ringtone:", error);
-    }
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioCtxRef.current = ctx;
+      const playTone = () => {
+        if (stoppedRef.current) return;
+        try {
+          const osc = ctx!.createOscillator();
+          const gain = ctx!.createGain();
+          osc.connect(gain);
+          gain.connect(ctx!.destination);
+          osc.frequency.value = 440;
+          osc.type = "sine";
+          gain.gain.setValueAtTime(0.25, ctx!.currentTime);
+          gain.gain.exponentialRampToValueAtTime(
+            0.001,
+            ctx!.currentTime + 0.35
+          );
+          osc.start(ctx!.currentTime);
+          osc.stop(ctx!.currentTime + 0.35);
+        } catch {}
+      };
+      playTone();
+      intervalRef.current = setInterval(playTone, 800);
+    } catch {}
 
     return () => {
       stoppedRef.current = true;
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
+      try {
+        audioCtxRef.current?.close();
+      } catch {}
     };
   }, []);
 
@@ -818,7 +910,7 @@ function ActiveCallOverlay({
         if (event.candidate && !unmountedRef.current) {
           const s = parentSocketRef;
           if (s?.connected) {
-            console.log("📞 Sending ICE candidate to:", targetId);
+            console.log("📞 Sending ICE candidate to:", targetId, "candidate:", event.candidate.candidate?.substring(0, 50) + "...");
             s.emit("call-ice-candidate", {
               to: targetId,
               candidate: event.candidate.toJSON(),
@@ -827,6 +919,8 @@ function ActiveCallOverlay({
           } else {
             console.log("📞 Socket not connected, ICE candidate NOT sent");
           }
+        } else if (!event.candidate) {
+          console.log("📞 ICE gathering complete");
         }
       };
 
@@ -1032,6 +1126,7 @@ function ActiveCallOverlay({
       const timeout = setTimeout(() => {
         if (!unmountedRef.current && statusRef.current === "connecting") {
           console.log("📞 Call timeout (45s) — ending");
+          console.log("📞 Final state check - peer exists:", !!peerRef.current, "iceBuffer:", iceBuffer.current.length, "answerBuffer:", answerBuffer.current.length);
           cleanup();
           onEndRef.current(false);
         }
