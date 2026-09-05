@@ -118,10 +118,15 @@ function Landing() {
   const { user, isAuthenticated, isAdmin, isPartner } = useAuth();
   const navigate = useNavigate();
   const [line, setLine] = useState(0);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Redirect ALL authenticated users — landing page is only for guests
   useEffect(() => {
-    if (isAuthenticated) {
+    if (mounted && isAuthenticated) {
       if (isAdmin) {
         navigate({ to: "/admin", replace: true });
       } else if (isPartner) {
@@ -130,7 +135,12 @@ function Landing() {
         navigate({ to: "/home", replace: true });
       }
     }
-  }, [isAuthenticated, isAdmin, isPartner, navigate]);
+  }, [isAuthenticated, isAdmin, isPartner, navigate, mounted]);
+
+  // Don't render landing page during SSR or for authenticated users
+  if (!mounted || isAuthenticated) {
+    return null;
+  }
 
   useEffect(() => {
     const t = setInterval(() => setLine((l) => (l + 1) % PHRASES.length), 3600);
@@ -536,7 +546,7 @@ function Landing() {
 
       <footer className="border-t border-border px-5 py-10">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 text-xs uppercase tracking-[0.3em] text-muted-foreground">
-          <span>MOMENT · Cotonou</span>
+          <span className="flex items-center gap-2"><img src="/logo.png" alt="Moment" className="h-25 w-25 object-contain" /> MOMENT · Cotonou</span>
           <span>Application de démonstration · Données de test</span>
         </div>
       </footer>

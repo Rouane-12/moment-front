@@ -157,7 +157,7 @@ function Explore() {
           ) : (
             <div className="mt-8 md:mt-12 grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {list.map((v) => {
-                const meta = CATEGORY_META[v.category];
+                const meta = CATEGORY_META[v.category] || CATEGORY_META.culture;
                 return (
                   <Link key={v.id} to="/venue/$id" params={{ id: v.id }} className="hover-lift surface-panel overflow-hidden">
                     <div className="relative">

@@ -104,13 +104,13 @@ export function DashboardSidebar() {
       >
         <div className="flex h-full flex-col overflow-hidden">
           {/* Header — FIXED, never scrolls */}
-          <div className="flex h-16 items-center justify-between border-b border-white/10 px-4 flex-shrink-0">
-            <Link to="/" className="text-display text-lg tracking-[0.3em] uppercase">
-              Moment
+          <div className="relative flex items-center justify-center border-b border-white/10 px-3 py-2 flex-shrink-0">
+            <Link to="/">
+              <img src="/logo.png" alt="Moment" className="h-30 w-30 object-contain" />
             </Link>
             <button
               onClick={() => setMobileOpen(false)}
-              className="lg:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
+              className="absolute top-3 right-3 lg:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
             >
               <X className="h-5 w-5" />
             </button>

@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { DashboardSidebar } from "./DashboardSidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "@tanstack/react-router";
@@ -7,6 +7,16 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
   const isChat = location.pathname === "/chat";
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Don't apply dashboard layout during SSR
+  if (!mounted) {
+    return <>{children}</>;
+  }
 
   if (!isAuthenticated) {
     return <>{children}</>;

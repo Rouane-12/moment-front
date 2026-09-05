@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const links = [
   { to: "/home", label: "Accueil" },
@@ -13,16 +13,22 @@ const links = [
 export function SiteNav() {
   const { user, isAuthenticated, logout, isAdmin } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Don't render SiteNav for authenticated users — they use the sidebar
-  if (isAuthenticated) return null;
+  // Also don't render during SSR to prevent hydration mismatch
+  if (!mounted || isAuthenticated) return null;
 
   return (
     <>
       <header className="glass-panel sticky top-0 z-40 border-b border-border">
         <div className="mx-auto flex h-14 sm:h-16 max-w-6xl items-center justify-between px-4 sm:px-5">
-          <Link to="/" className="text-display text-lg sm:text-xl tracking-[0.3em] uppercase">
-            Moment
+          <Link to="/" className="flex items-center">
+            <img src="/logo.png" alt="Moment" className="h-25 w-25 object-contain" />
           </Link>
 
           {/* Desktop Navigation */}

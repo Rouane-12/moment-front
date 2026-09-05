@@ -62,7 +62,7 @@ function cleanupDedup() {
   }
 }
 
-export function GlobalCallListener() {
+function GlobalCallListenerInner() {
   const { user } = useAuth();
   const [renderState, setRenderState] = useState<{
     phase: "none" | "ringing" | "active";
@@ -82,6 +82,68 @@ export function GlobalCallListener() {
   const peerEndedRef = useRef(false);
   const renderStateRef = useRef(renderState);
   renderStateRef.current = renderState;
+
+  // ── Parent-level buffer for call events that arrive BEFORE overlay mounts ──
+  const bufferedIce = useRef<any[]>([]);
+  const bufferedAnswer = useRef<any[]>([]);
+
+  // ── Permission management ──
+  const [permissionsChecked, setPermissionsChecked] = useState(false);
+
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (permissionsChecked) return;
+      
+      try {
+        // Request microphone permission
+        await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        console.log("📞 Microphone permission granted");
+        
+        // Request notification permission
+        if ("Notification" in window && Notification.permission === "default") {
+          await Notification.requestPermission();
+          console.log("📞 Notification permission:", Notification.permission);
+        }
+        
+        setPermissionsChecked(true);
+      } catch (error) {
+        console.error("📞 Permission request failed:", error);
+        // Don't block the app if permissions are denied
+        setPermissionsChecked(true);
+      }
+    };
+
+    // Check permissions on first user interaction or after a delay
+    const timer = setTimeout(checkPermissions, 2000);
+    return () => clearTimeout(timer);
+  }, [permissionsChecked]);
+
+  // ── Caller ringtone management ──
+  const callerRingtoneRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    // Play ringtone for caller when outgoing call starts
+    if (renderState.phase === "active" && renderState.callDirection === "outgoing") {
+      if (!callerRingtoneRef.current) {
+        callerRingtoneRef.current = new Audio("/sounds/caller-ringtone.mp3");
+        callerRingtoneRef.current.loop = true;
+        callerRingtoneRef.current.volume = 0.5;
+      }
+      callerRingtoneRef.current.play().catch(console.error);
+    } else {
+      if (callerRingtoneRef.current) {
+        callerRingtoneRef.current.pause();
+        callerRingtoneRef.current.currentTime = 0;
+      }
+    }
+
+    return () => {
+      if (callerRingtoneRef.current) {
+        callerRingtoneRef.current.pause();
+        callerRingtoneRef.current.currentTime = 0;
+      }
+    };
+  }, [renderState.phase, renderState.callDirection]);
 
   const endCall = useCallback((sendMissed = false) => {
     if (callEndedRef.current) {
@@ -122,6 +184,10 @@ export function GlobalCallListener() {
       }).catch(() => {});
     }
 
+    // Clear parent-level buffers
+    bufferedIce.current = [];
+    bufferedAnswer.current = [];
+
     setRenderState({
       phase: "none",
       incomingCall: null,
@@ -141,9 +207,11 @@ export function GlobalCallListener() {
       import.meta.env["VITE_API_URL"] || "http://localhost:5200",
       {
         auth: { token },
-        transports: ["websocket", "polling"],
+        transports: ["polling", "websocket"],
         reconnection: true,
         reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+        forceNew: false,
       }
     );
     socketRef.current = socket;
@@ -160,11 +228,28 @@ export function GlobalCallListener() {
       console.log("📞 Socket disconnected:", reason)
     );
 
+    // === PARENT-LEVEL BUFFER for call-answer and call-ice-candidate ===
+    // These arrive BEFORE the overlay mounts (race condition fix)
+    const handleParentAnswer = (data: any) => {
+      if (phaseRef.current === "active") {
+        console.log("📞 Parent buffering call-answer (overlay not mounted yet)");
+        bufferedAnswer.current.push(data);
+      }
+    };
+    const handleParentIce = (data: any) => {
+      if (phaseRef.current === "active") {
+        console.log("📞 Parent buffering call-ice-candidate (overlay not mounted yet)");
+        bufferedIce.current.push(data);
+      }
+    };
+    socket.on("call-answer", handleParentAnswer);
+    socket.on("call-ice-candidate", handleParentIce);
+
     // === INCOMING CALL ===
     socket.on("call-init", (data: any) => {
-      // CRITICAL: Ignore our own call-init (prevents self-loop bug)
+      // CRITICAL: Ignore our own call-init
       if (data.from?._id === user?.id) {
-        console.log("📞 call-init from SELF — ignoring (would cause loop)");
+        console.log("📞 call-init from SELF — ignoring");
         return;
       }
 
@@ -204,12 +289,27 @@ export function GlobalCallListener() {
           socket.emit("call-end", {
             to: data.from._id,
             callId: data.callId || "busy",
+            from: user?.id,
           });
         }
         return;
       }
 
       console.log("📞 NEW incoming call from:", data.from?.firstName);
+
+      // Show notification for incoming call
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification(`Appel entrant de ${data.from?.firstName}`, {
+          body: "Appuyez pour répondre",
+          icon: "/logo.png",
+          tag: `call-${data.from?._id}`,
+          requireInteraction: true,
+        });
+      }
+
+      // Clear any stale buffers
+      bufferedIce.current = [];
+      bufferedAnswer.current = [];
 
       setRenderState({
         phase: "ringing",
@@ -222,7 +322,6 @@ export function GlobalCallListener() {
 
     // === CALL ENDED ===
     socket.on("call-ended", (data: any) => {
-      // Ignore call-ended from ourselves (prevents self-loop)
       if (data.from === user?.id) {
         console.log("📞 call-ended from SELF — ignoring");
         return;
@@ -248,6 +347,10 @@ export function GlobalCallListener() {
       lastCallEndTime = Date.now();
       callEndedRef.current = true;
       peerEndedRef.current = true;
+
+      // Clear buffers
+      bufferedIce.current = [];
+      bufferedAnswer.current = [];
 
       setRenderState({
         phase: "none",
@@ -285,6 +388,9 @@ export function GlobalCallListener() {
               outgoingCallId++;
               callEndedRef.current = false;
               peerEndedRef.current = false;
+              // Clear stale buffers
+              bufferedIce.current = [];
+              bufferedAnswer.current = [];
               setRenderState({
                 phase: "active",
                 incomingCall: null,
@@ -303,6 +409,9 @@ export function GlobalCallListener() {
         outgoingCallId++;
         callEndedRef.current = false;
         peerEndedRef.current = false;
+        // Clear stale buffers
+        bufferedIce.current = [];
+        bufferedAnswer.current = [];
         console.log(
           "📞 START OUTGOING to:",
           e.detail.targetUser.firstName
@@ -327,6 +436,10 @@ export function GlobalCallListener() {
     callEndedRef.current = false;
     peerEndedRef.current = false;
 
+    // Clear stale buffers from previous attempts
+    bufferedIce.current = [];
+    bufferedAnswer.current = [];
+
     setRenderState({
       phase: "active",
       incomingCall: call,
@@ -342,6 +455,7 @@ export function GlobalCallListener() {
       socketRef.current.emit("call-end", {
         to: call.from._id,
         callId: "reject",
+        from: user?.id,
       });
     }
     lastCallEndTime = Date.now();
@@ -351,7 +465,9 @@ export function GlobalCallListener() {
       incomingCall: null,
     }));
     phaseRef.current = "none";
-  }, [renderState.incomingCall]);
+    bufferedIce.current = [];
+    bufferedAnswer.current = [];
+  }, [renderState.incomingCall, user?.id]);
 
   const { phase, incomingCall, callPeer, callDirection } = renderState;
 
@@ -361,6 +477,8 @@ export function GlobalCallListener() {
         onForceClose={() => {
           phaseRef.current = "none";
           callEndedRef.current = true;
+          bufferedIce.current = [];
+          bufferedAnswer.current = [];
           setRenderState({
             phase: "none",
             incomingCall: null,
@@ -377,6 +495,8 @@ export function GlobalCallListener() {
           direction={callDirection}
           incomingCall={callDirection === "incoming" ? incomingCall : null}
           onEnd={endCall}
+          parentIceBuffer={bufferedIce.current.splice(0)}
+          parentAnswerBuffer={bufferedAnswer.current.splice(0)}
         />
       </CallErrorBoundary>
     );
@@ -396,6 +516,26 @@ export function GlobalCallListener() {
   return null;
 }
 
+export function GlobalCallListener() {
+  // Early return before any hooks for SSR
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Don't render anything before mount
+  if (!mounted) {
+    return null;
+  }
+
+  return <GlobalCallListenerInner />;
+}
+
 /* ══════════════════════════════════════
    Incoming Call UI
    ══════════════════════════════════════ */
@@ -408,109 +548,58 @@ function IncomingCallUI({
   onAccept: () => void;
   onReject: () => void;
 }) {
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const stoppedRef = useRef(false);
 
   useEffect(() => {
     stoppedRef.current = false;
-    let ctx: AudioContext | null = null;
 
+    // Use native ringtone sound file instead of Web Audio API
     try {
-      ctx = new AudioContext();
-      audioCtxRef.current = ctx;
-      const playTone = () => {
-        if (stoppedRef.current) return;
-        try {
-          const osc = ctx!.createOscillator();
-          const gain = ctx!.createGain();
-          osc.connect(gain);
-          gain.connect(ctx!.destination);
-          osc.frequency.value = 440;
-          osc.type = "sine";
-          gain.gain.setValueAtTime(0.25, ctx!.currentTime);
-          gain.gain.exponentialRampToValueAtTime(
-            0.001,
-            ctx!.currentTime + 0.35
-          );
-          osc.start(ctx!.currentTime);
-          osc.stop(ctx!.currentTime + 0.35);
-        } catch {}
-      };
-      playTone();
-      intervalRef.current = setInterval(playTone, 800);
-    } catch {}
-
-    if (
-      "Notification" in window &&
-      Notification.permission === "default"
-    ) {
-      Notification.requestPermission();
-    }
-    if (
-      "Notification" in window &&
-      Notification.permission === "granted"
-    ) {
-      try {
-        new Notification("📞 Appel entrant", {
-          body: `${from.firstName} ${from.lastName} vous appelle`,
-        });
-      } catch {}
+      if (!audioRef.current) {
+        audioRef.current = new Audio("/sounds/incoming-ringtone.mp3");
+        audioRef.current.loop = true;
+        audioRef.current.volume = 0.7;
+      }
+      audioRef.current.play().catch(console.error);
+    } catch (error) {
+      console.error("📞 Failed to play ringtone:", error);
     }
 
     return () => {
       stoppedRef.current = true;
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
       }
-      try {
-        audioCtxRef.current?.close();
-      } catch {}
-      audioCtxRef.current = null;
     };
   }, []);
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center">
-      <div className="relative mb-8">
-        <div className="absolute -inset-8 rounded-full border-2 border-green-400/30 animate-ping" />
-        <div
-          className="absolute -inset-16 rounded-full border border-green-400/15 animate-ping"
-          style={{ animationDelay: "0.5s" }}
-        />
-        <div className="w-28 h-28 rounded-full bg-gradient-to-br from-green-500/30 to-green-600/10 flex items-center justify-center">
-          <span className="text-green-400 text-4xl font-bold">
-            {from.firstName[0]}
-            {from.lastName[0]}
-          </span>
+      <div className="text-center mb-8">
+        <div className="w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4 animate-pulse">
+          <PhoneIncoming className="w-12 h-12 text-primary" />
         </div>
+        <h2 className="text-2xl font-bold text-white mb-2">
+          {from.firstName} {from.lastName}
+        </h2>
+        <p className="text-muted-foreground">Appel entrant...</p>
       </div>
-      <h2 className="text-2xl font-bold text-white">
-        {from.firstName} {from.lastName}
-      </h2>
-      <p className="text-sm text-green-400 mt-2 animate-pulse">
-        Appel entrant...
-      </p>
-      <div className="flex items-center gap-12 mt-16">
-        <div className="flex flex-col items-center gap-2">
-          <button
-            onClick={onReject}
-            className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-all hover:scale-110"
-          >
-            <PhoneOff className="h-7 w-7 text-white" />
-          </button>
-          <span className="text-xs text-white/50">Refuser</span>
-        </div>
-        <div className="flex flex-col items-center gap-2">
-          <button
-            onClick={onAccept}
-            className="w-16 h-16 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center transition-all hover:scale-110 animate-bounce"
-          >
-            <PhoneIncoming className="h-7 w-7 text-white" />
-          </button>
-          <span className="text-xs text-white/50">Accepter</span>
-        </div>
+      
+      <div className="flex gap-4">
+        <button
+          onClick={onAccept}
+          className="w-16 h-16 rounded-full bg-green-500 hover:bg-green-600 transition-colors flex items-center justify-center"
+        >
+          <Phone className="w-8 h-8 text-white" />
+        </button>
+        <button
+          onClick={onReject}
+          className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center"
+        >
+          <PhoneOff className="w-8 h-8 text-white" />
+        </button>
       </div>
     </div>
   );
@@ -526,6 +615,8 @@ function ActiveCallOverlay({
   direction,
   incomingCall,
   onEnd,
+  parentIceBuffer,
+  parentAnswerBuffer,
 }: {
   peer: { _id: string; firstName: string; lastName: string };
   socket: any;
@@ -533,6 +624,8 @@ function ActiveCallOverlay({
   direction: "incoming" | "outgoing";
   incomingCall: IncomingCall | null;
   onEnd: (sendMissed?: boolean) => void;
+  parentIceBuffer: any[];
+  parentAnswerBuffer: any[];
 }) {
   const [status, setStatus] = useState<"connecting" | "connected">(
     "connecting"
@@ -549,12 +642,28 @@ function ActiveCallOverlay({
   const statusRef = useRef<"connecting" | "connected">("connecting");
   statusRef.current = status;
 
-  // Local buffers for ICE/answer that arrive before peer is ready
+  // Local buffers for ICE/answer
   const iceBuffer = useRef<any[]>([]);
   const answerBuffer = useRef<any[]>([]);
 
   const onEndRef = useRef(onEnd);
   onEndRef.current = onEnd;
+
+  // Seed buffers with parent-level data
+  useEffect(() => {
+    if (parentIceBuffer.length > 0) {
+      console.log("📞 Overlay: ingesting", parentIceBuffer.length, "parent-buffered ICE candidates");
+      iceBuffer.current.push(...parentIceBuffer);
+    }
+    if (parentAnswerBuffer.length > 0) {
+      console.log("📞 Overlay: ingesting", parentAnswerBuffer.length, "parent-buffered answers");
+      answerBuffer.current.push(...parentAnswerBuffer);
+    }
+    // Drain immediately after ingesting
+    setTimeout(() => drainBuffer(), 50);
+    setTimeout(() => drainBuffer(), 200);
+    setTimeout(() => drainBuffer(), 500);
+  }, []);
 
   const cleanup = useCallback(() => {
     if (unmountedRef.current) return;
@@ -583,12 +692,9 @@ function ActiveCallOverlay({
     if (unmountedRef.current) return;
     const pc = peerRef.current;
     if (!pc) {
-      if (answerBuffer.current.length > 0 || iceBuffer.current.length > 0) {
-        console.log(
-          "📞 drainBuffer: peer not ready, buffers:",
-          answerBuffer.current.length,
-          iceBuffer.current.length
-        );
+      const total = answerBuffer.current.length + iceBuffer.current.length;
+      if (total > 0) {
+        console.log("📞 drainBuffer: peer not ready, buffers:", answerBuffer.current.length, iceBuffer.current.length);
       }
       return;
     }
@@ -630,10 +736,7 @@ function ActiveCallOverlay({
         if (e?.name === "InvalidStateError") {
           // Remote description not set yet — re-queue
           iceBuffer.current.push(data);
-          console.log(
-            "📞 ICE re-queued (remote desc not ready), buffers remaining:",
-            iceBuffer.current.length
-          );
+          console.log("📞 ICE re-queued (remote desc not ready)");
           break;
         }
         console.error("📞 Buffered ICE error:", e);
@@ -650,7 +753,7 @@ function ActiveCallOverlay({
     }
 
     console.log(
-      "📞 Subscribing to call-answer and call-ice-candidate on socket, socket connected:",
+      "📞 Subscribing to call-answer and call-ice-candidate on socket, connected:",
       s.connected
     );
 
@@ -676,7 +779,7 @@ function ActiveCallOverlay({
         console.log(
           "📞 ICE candidate queued, peer ready:",
           !!peerRef.current,
-          "buffer size:",
+          "buffer:",
           iceBuffer.current.length
         );
         drainBuffer();
@@ -722,9 +825,7 @@ function ActiveCallOverlay({
               from: user?.id,
             });
           } else {
-            console.log(
-              "📞 Socket not connected, ICE candidate NOT sent"
-            );
+            console.log("📞 Socket not connected, ICE candidate NOT sent");
           }
         }
       };
@@ -747,15 +848,13 @@ function ActiveCallOverlay({
       pc.onconnectionstatechange = () => {
         if (unmountedRef.current) return;
         const state = pc.connectionState;
-        console.log("📞 WebRTC state:", state);
+        console.log("📞 WebRTC connection state:", state);
         if (state === "connected") {
           setStatus("connected");
           statusRef.current = "connected";
         }
         if (state === "failed") {
           console.log("📞 WebRTC failed — waiting for timeout or recovery");
-          // Don't end call immediately — let timeout handle it
-          // On mobile, connection state can temporarily go "failed" then recover
         }
         if (state === "closed") {
           console.log("📞 WebRTC closed → ending call");
@@ -767,6 +866,10 @@ function ActiveCallOverlay({
       pc.oniceconnectionstatechange = () => {
         if (!unmountedRef.current) {
           console.log("📞 ICE state:", pc.iceConnectionState);
+          if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+            setStatus("connected");
+            statusRef.current = "connected";
+          }
         }
       };
 
@@ -891,6 +994,12 @@ function ActiveCallOverlay({
           from: user?.id,
         });
         console.log("📞 call-answer emitted, waiting for connection...");
+
+        // Drain buffered candidates from the phone (may have arrived before peer was ready)
+        setTimeout(() => drainBuffer(), 100);
+        setTimeout(() => drainBuffer(), 500);
+        setTimeout(() => drainBuffer(), 1500);
+        setTimeout(() => drainBuffer(), 3000);
       } catch (e) {
         console.error("📞 Incoming failed:", e);
         onEndRef.current(false);
@@ -901,7 +1010,7 @@ function ActiveCallOverlay({
       aborted = true;
       cleanup();
     };
-  }, [direction, socket, incomingCall, setupPeer, cleanup, user]);
+  }, [direction, socket, incomingCall, setupPeer, cleanup, user, drainBuffer]);
 
   // Timer
   useEffect(() => {
@@ -917,7 +1026,7 @@ function ActiveCallOverlay({
     };
   }, [status]);
 
-  // Connection timeout — 45s (generous for mobile)
+  // Connection timeout — 45s
   useEffect(() => {
     if (status === "connecting") {
       const timeout = setTimeout(() => {

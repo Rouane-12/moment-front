@@ -130,6 +130,9 @@ function Register() {
         <div className="pattern-adinkra pointer-events-none fixed inset-0" />
 
         <div className="relative">
+          <div className="flex items-center gap-3 mb-2">
+            <img src="/logo.png" alt="Moment" className="h-10 w-10 object-contain" />
+          </div>
           <h1 className="text-display text-3xl uppercase">Créer un compte</h1>
           <p className="mt-4 text-muted-foreground">
             Rejoignez MOMENT pour créer vos moments

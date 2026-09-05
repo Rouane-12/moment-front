@@ -57,6 +57,9 @@ function Login() {
         <div className="pattern-adinkra pointer-events-none fixed inset-0" />
         
         <div className="relative">
+          <div className="flex items-center gap-3 mb-2">
+            <img src="/logo.png" alt="Moment" className="h-10 w-10 object-contain" />
+          </div>
           <h1 className="text-display text-2xl md:text-3xl uppercase">Connexion</h1>
           <p className="mt-4 text-sm md:text-base text-muted-foreground">Connectez-vous pour créer vos moments</p>
 

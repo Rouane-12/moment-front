@@ -38,8 +38,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const checkAuth = async () => {
     try {
       const response = await api.auth.getMe();
-      if (response.success && response.user) {
-        setUser(response.user);
+      if (response.success && response['user']) {
+        setUser(response['user']);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -50,23 +50,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, phone: string, password: string) => {
     const response = await api.auth.login({ email, phone, password });
-    if (response.success && response.user) {
+    if (response.success && response['user']) {
       // Store token in localStorage for cross-domain requests
-      if (response.token) {
-        localStorage.setItem('token', response.token);
+      if (response['token']) {
+        localStorage.setItem('token', response['token']);
       }
-      setUser(response.user);
+      setUser(response['user']);
     }
   };
 
   const register = async (data: any) => {
     const response = await api.auth.register(data);
-    if (response.success && response.user) {
+    if (response.success && response['user']) {
       // Store token in localStorage for cross-domain requests
-      if (response.token) {
-        localStorage.setItem('token', response.token);
+      if (response['token']) {
+        localStorage.setItem('token', response['token']);
       }
-      setUser(response.user);
+      setUser(response['user']);
     }
   };
 
@@ -95,6 +95,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
+    // Return default values during SSR to prevent crashes
+    if (typeof window === 'undefined') {
+      return {
+        user: null,
+        setUser: () => {},
+        loading: true,
+        login: async () => {},
+        register: async () => {},
+        logout: async () => {},
+        refreshUser: async () => {},
+        isAuthenticated: false,
+        isAdmin: false,
+        isPartner: false,
+      };
+    }
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
