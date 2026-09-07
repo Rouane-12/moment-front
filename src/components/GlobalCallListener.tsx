@@ -278,22 +278,14 @@ function GlobalCallListenerInner() {
     });
 
     // === CALL ENDED ===
+    // NO dedup for call-ended — it must ALWAYS be processed so both sides end properly
     socket.on("call-ended", (data: any) => {
       if (data.from === user?.id) {
         console.log("📞 call-ended from SELF — ignoring");
         return;
       }
 
-      const callId = data?.callId || "unknown";
-      const dedupeKey = `ended-${callId}-${data?.from || "x"}`;
-      if (processedCallInits.has(dedupeKey)) {
-        console.log("📞 call-ended DUPLICATE — ignoring");
-        return;
-      }
-      processedCallInits.add(dedupeKey);
-      cleanupDedup();
-
-      console.log("📞 call-ended received:", callId, "phase:", phaseRef.current, "from:", data.from);
+      console.log("📞 call-ended received:", data?.callId, "phase:", phaseRef.current, "from:", data.from);
       lastCallEndTime = Date.now();
       callEndedRef.current = true;
       peerEndedRef.current = true;
@@ -820,12 +812,11 @@ function ActiveCallOverlay({
         await pc.setLocalDescription(offer);
         console.log("📞 Local description set (offer), signaling:", pc.signalingState);
 
-        // Wait for ICE gathering to start
-        await new Promise((r) => setTimeout(r, 800));
-
+        // Emit call-init IMMEDIATELY — before ICE gathering
+        // This way the receiver knows about the call before ICE arrives
         const s = parentSocketRef;
         if (!s?.connected) {
-          console.error("📞 Socket not connected after 800ms, aborting");
+          console.error("📞 Socket not connected, aborting");
           cleanup();
           onEndRef.current(false);
           return;
@@ -839,7 +830,7 @@ function ActiveCallOverlay({
           callId: outgoingCallId,
           timestamp: Date.now(),
         });
-        console.log("📞 call-init emitted, waiting for call-answer...");
+        console.log("📞 call-init emitted, ICE will follow as gathered");
       } catch (e) {
         console.error("📞 Outgoing call failed:", e);
         onEndRef.current(false);
@@ -868,6 +859,8 @@ function ActiveCallOverlay({
         const pc = setupPeer(incomingCall.from._id, stream);
         await pc.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
         console.log("📞 Remote description set (offer), creating answer...");
+        // Immediately drain ICE candidates buffered while waiting for remote desc
+        drainBuffer();
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         console.log("📞 Local description set (answer), signaling:", pc.signalingState);
