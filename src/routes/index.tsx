@@ -124,6 +124,12 @@ function Landing() {
     setMounted(true);
   }, []);
 
+  // Phrase rotation — MUST be before any conditional return (Rules of Hooks)
+  useEffect(() => {
+    const t = setInterval(() => setLine((l) => (l + 1) % PHRASES.length), 3600);
+    return () => clearInterval(t);
+  }, []);
+
   // Redirect ALL authenticated users — landing page is only for guests
   useEffect(() => {
     if (mounted && isAuthenticated) {
@@ -141,11 +147,6 @@ function Landing() {
   if (!mounted || isAuthenticated) {
     return null;
   }
-
-  useEffect(() => {
-    const t = setInterval(() => setLine((l) => (l + 1) % PHRASES.length), 3600);
-    return () => clearInterval(t);
-  }, []);
 
   return (
     <div className="grain min-h-screen">

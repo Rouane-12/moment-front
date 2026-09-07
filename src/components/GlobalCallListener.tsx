@@ -66,7 +66,7 @@ function cleanupDedup() {
   }
 }
 
-function GlobalCallListenerInner({ onError }: { onError?: () => void } = {}) {
+function GlobalCallListenerInner() {
   const { user } = useAuth();
   const [renderState, setRenderState] = useState<{
     phase: "none" | "ringing" | "active";
@@ -436,15 +436,9 @@ function GlobalCallListenerInner({ onError }: { onError?: () => void } = {}) {
 
 export function GlobalCallListener() {
   const [mounted, setMounted] = useState(false);
-  const [error, setError] = useState(false);
   useEffect(() => { setMounted(true); }, []);
-  if (!mounted || error) return null;
-  try {
-    return <GlobalCallListenerInner onError={() => setError(true)} />;
-  } catch (e) {
-    console.error("📞 GlobalCallListener render error:", e);
-    return null;
-  }
+  if (!mounted) return null;
+  return <GlobalCallListenerInner />;
 }
 
 /* ══════════════════════════════════════
