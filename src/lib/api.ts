@@ -353,6 +353,21 @@ export const api = {
       request(`/api/chat/messages/${messageId}`, {
         method: 'DELETE',
       }),
+
+    deleteConversation: (conversationId: string) =>
+      request(`/api/chat/conversation/${conversationId}`, {
+        method: 'DELETE',
+      }),
+
+    hideConversation: (conversationId: string) =>
+      request(`/api/chat/conversation/${conversationId}/hide`, {
+        method: 'DELETE',
+      }),
+
+    blockUser: (userId: string) =>
+      request(`/api/chat/block/${userId}`, {
+        method: 'POST',
+      }),
   },
 
   reports: {

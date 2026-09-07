@@ -7,13 +7,14 @@ import { io, Socket } from "socket.io-client";
 import { QRCodeSVG } from "qrcode.react";
 import { Html5Qrcode } from "html5-qrcode";
 import { EmojiPicker } from "@/components/EmojiPicker";
+import { GameMenu, GameRenderer, GameInviteCard, type GameType } from "@/components/chat/MiniGames";
 
 import * as LucideIcons from "lucide-react";
 
 const {
   MessageCircle, Send, QrCode, ArrowLeft, Check, CheckCheck, Search, X,
   Camera, Shield, Mic, Paperclip, FileText, Square, Phone, PhoneOff,
-  Play, Pause, Trash2, Pencil, Download, Video, Smile, Loader2
+  Play, Pause, Trash2, Pencil, Download, Video, Smile, Loader2, Gamepad2
 } = LucideIcons;
 const ImageIcon = LucideIcons.Image;
 
@@ -70,6 +71,11 @@ function ChatPage() {
   const [editContent, setEditContent] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [showChatMenu, setShowChatMenu] = useState(false);
+  const [convContextMenu, setConvContextMenu] = useState<{ convId: string; otherUserId: string; x: number; y: number } | null>(null);
+  const [showGameMenu, setShowGameMenu] = useState(false);
+  const [activeGame, setActiveGame] = useState<any>(null);
+  const [gamePlayers, setGamePlayers] = useState<Record<string, any>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -105,6 +111,32 @@ function ChatPage() {
 
     socket.on("message-deleted", (data: { messageId: string; conversationId: string }) => {
       setMessages((prev) => prev.filter((m) => m._id !== data.messageId));
+    });
+
+    socket.on("conversation-cleared", (data: { conversationId: string }) => {
+      setMessages([]);
+      loadConversations();
+    });
+
+    // === MINI-GAMES ===
+    socket.on("game-invite", (data: { game: any; from: string }) => {
+      setActiveGame(data.game);
+      setGamePlayers(prev => {
+        const next = { ...prev };
+        // Store player info from the game
+        data.game.players.forEach((p: string) => {
+          if (!next[p]) next[p] = { _id: p, firstName: "Joueur", lastName: "" };
+        });
+        return next;
+      });
+    });
+
+    socket.on("game-start", (data: { game: any }) => {
+      setActiveGame(data.game);
+    });
+
+    socket.on("game-state", (data: { game: any }) => {
+      setActiveGame(data.game);
     });
 
     socket.on("presence-update", (data: { userId: string; online: boolean }) => {
@@ -153,7 +185,9 @@ function ChatPage() {
   }, [selectedConv?.conversationId, loadMessages]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages, loadingMessages]);
 
   // === SEND TEXT MESSAGE ===
@@ -396,6 +430,73 @@ function ChatPage() {
     } catch (e) { console.error(e); }
   };
 
+  // === CONVERSATION MANAGEMENT ===
+  const handleClearConversation = async (convId: string) => {
+    if (!confirm("Supprimer tous les messages de cette conversation ?")) return;
+    try {
+      await api.chat.deleteConversation(convId);
+      setMessages([]);
+      loadConversations();
+    } catch (e) { console.error(e); }
+    setConvContextMenu(null);
+    setShowChatMenu(false);
+  };
+
+  const handleHideConversation = async (convId: string, otherUserId: string) => {
+    if (!confirm("Supprimer cette conversation de la liste ?")) return;
+    try {
+      await api.chat.hideConversation(convId);
+      if (selectedConv?.conversationId === convId) setSelectedConv(null);
+      loadConversations();
+    } catch (e) { console.error(e); }
+    setConvContextMenu(null);
+  };
+
+  const handleBlockUser = async (userId: string) => {
+    if (!confirm("Bloquer cet utilisateur ?")) return;
+    try {
+      await api.chat.blockUser(userId);
+      alert("Utilisateur bloqué");
+    } catch (e) { console.error(e); }
+    setConvContextMenu(null);
+    setShowChatMenu(false);
+  };
+
+  // === MINI-GAMES ===
+  const handleGameSelect = (type: GameType) => {
+    if (!selectedConv || !socketRef.current) return;
+    socketRef.current.emit("game-invite", {
+      to: selectedConv.otherUser._id,
+      gameType: type,
+    });
+  };
+
+  const handleGameMove = (data: any) => {
+    if (!socketRef.current) return;
+    socketRef.current.emit("game-move", data);
+  };
+
+  const handleGameAccept = () => {
+    if (!activeGame || !socketRef.current) return;
+    socketRef.current.emit("game-accept", { gameId: activeGame.id });
+  };
+
+  const handleGameDecline = () => {
+    if (!activeGame || !socketRef.current) return;
+    socketRef.current.emit("game-decline", { gameId: activeGame.id });
+    setActiveGame(null);
+  };
+
+  const handleGameRematch = () => {
+    if (!activeGame || !socketRef.current) return;
+    socketRef.current.emit("game-rematch", { gameId: activeGame.id });
+  };
+
+  const handleGameNextRound = () => {
+    if (!activeGame || !socketRef.current) return;
+    socketRef.current.emit("game-next-round", { gameId: activeGame.id });
+  };
+
   const filtered = conversations.filter((c) =>
     `${c.otherUser.firstName} ${c.otherUser.lastName}`.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -452,6 +553,15 @@ function ChatPage() {
     );
   };
 
+  // Close conv context menu on outside click
+  useEffect(() => {
+    const close = () => setConvContextMenu(null);
+    if (convContextMenu) {
+      document.addEventListener("click", close);
+      return () => document.removeEventListener("click", close);
+    }
+  }, [convContextMenu]);
+
   // ===== CONVERSATION LIST =====
   if (!selectedConv) {
     return (
@@ -507,7 +617,12 @@ function ChatPage() {
             ) : (
               <div className="space-y-0.5">
                 {filtered.map((conv) => (
-                  <button key={conv.conversationId} onClick={() => setSelectedConv(conv)}
+                  <div key={conv.conversationId} className="relative">
+                  <button onClick={() => setSelectedConv(conv)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setConvContextMenu({ convId: conv.conversationId, otherUserId: conv.otherUser._id, x: Math.min(e.clientX, window.innerWidth - 200), y: Math.min(e.clientY, window.innerHeight - 120) });
+                    }}
                     className="w-full p-3 flex items-center gap-3 rounded-xl hover:bg-white/5 transition-colors text-left">
                     <div className="relative w-11 h-11 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center flex-shrink-0">
                       {conv.otherUser.avatar ? (
@@ -540,6 +655,18 @@ function ChatPage() {
                       </div>
                     </div>
                   </button>
+                  {convContextMenu?.convId === conv.conversationId && (
+                    <div className="absolute right-2 top-12 z-[200] bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl py-1 min-w-[180px]"
+                      onClick={(e) => e.stopPropagation()}>
+                      <button onClick={() => { setSelectedConv(conv); setConvContextMenu(null); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white hover:bg-white/10">
+                        <MessageCircle className="h-4 w-4 text-blue-400" /> Ouvrir
+                      </button>
+                      <button onClick={() => handleHideConversation(conv.conversationId, conv.otherUser._id)} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-white/10">
+                        <Trash2 className="h-4 w-4" /> Supprimer
+                      </button>
+                    </div>
+                  )}
+                  </div>
                 ))}
               </div>
             )}
@@ -591,7 +718,7 @@ function ChatPage() {
     <ProtectedRoute>
       <div className="grain flex-1 min-h-0 flex flex-col overflow-hidden bg-background">
         {/* ── HEADER (sticky, never scrolls) ── */}
-        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-b border-white/10 px-3 py-2.5 flex items-center gap-2.5 z-10">
+        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-b border-white/10 px-3 py-2.5 flex items-center gap-2.5 z-10 relative">
           <button onClick={() => setSelectedConv(null)} className="p-2 rounded-xl hover:bg-white/10 transition-colors">
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -615,6 +742,11 @@ function ChatPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => setShowGameMenu(true)}
+              className="p-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              title="Mini-jeux">
+              <Gamepad2 className="h-5 w-5" />
+            </button>
             <button onClick={() => {
               window.dispatchEvent(new CustomEvent("start-outgoing-call", { detail: { targetUser: selectedConv.otherUser } }));
             }}
@@ -622,11 +754,30 @@ function ChatPage() {
               title="Appel vocal">
               <Phone className="h-5 w-5" />
             </button>
+            <button onClick={() => setShowChatMenu(!showChatMenu)}
+              className="p-2 rounded-xl hover:bg-white/10 transition-colors">
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+            </button>
           </div>
+          {showChatMenu && (
+            <div className="absolute right-3 top-full mt-1 z-[200] bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl py-1 min-w-[220px]">
+              <button onClick={() => { handleClearConversation(selectedConv.conversationId); setShowChatMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-orange-400 hover:bg-white/10">
+                <Trash2 className="h-4 w-4" /> Vider la conversation
+              </button>
+              <button onClick={() => { handleBlockUser(selectedConv.otherUser._id); setShowChatMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-white/10">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                Bloquer
+              </button>
+              <button onClick={() => { handleHideConversation(selectedConv.conversationId, selectedConv.otherUser._id); setShowChatMenu(false); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-white/10">
+                <Trash2 className="h-4 w-4" /> Supprimer la conversation
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── MESSAGES (the ONLY scrollable area) ── */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-3 space-y-1.5 overscroll-contain scrollbar-hide">
+        <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-3 overscroll-contain scrollbar-hide" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="flex-1" />
           {loadingMessages ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3">
               <Loader2 className="h-8 w-8 text-primary animate-spin" />
@@ -900,6 +1051,49 @@ function ChatPage() {
       </div>
 
       <MediaViewer />
+
+      {/* ── GAME MENU POPUP ── */}
+      {showGameMenu && (
+        <GameMenu onSelect={handleGameSelect} onClose={() => setShowGameMenu(false)} />
+      )}
+
+      {/* ── ACTIVE GAME OVERLAY ── */}
+      {activeGame && activeGame.state !== "waiting" && (
+        <div className="fixed inset-0 z-[250] bg-black/70 flex items-center justify-center p-4" onClick={() => { if (activeGame.state === "finished") setActiveGame(null); }}>
+          <div className="bg-[#111] border border-white/10 rounded-2xl overflow-hidden max-w-xs w-full" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10">
+              <span className="text-xs font-bold text-primary">🎮 {activeGame.type.toUpperCase()}</span>
+              {activeGame.state === "finished" && (
+                <button onClick={() => setActiveGame(null)} className="p-1 rounded-lg hover:bg-white/10"><X className="h-4 w-4" /></button>
+              )}
+            </div>
+            <div className="p-4">
+              <GameRenderer
+                game={activeGame}
+                currentUserId={user?.id || ""}
+                players={gamePlayers}
+                onMove={handleGameMove}
+                onRematch={handleGameRematch}
+                onNextRound={handleGameNextRound}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── GAME INVITE CARD ── */}
+      {activeGame && activeGame.state === "waiting" && (
+        <div className="fixed inset-0 z-[250] bg-black/70 flex items-center justify-center p-4" onClick={() => { if (activeGame.createdBy === user?.id) setActiveGame(null); }}>
+          <div onClick={e => e.stopPropagation()}>
+            <GameInviteCard
+              game={activeGame}
+              currentUserId={user?.id || ""}
+              onAccept={handleGameAccept}
+              onDecline={handleGameDecline}
+            />
+          </div>
+        </div>
+      )}
     </ProtectedRoute>
   );
 }
