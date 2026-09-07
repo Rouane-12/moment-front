@@ -16,6 +16,7 @@ import { Route as ChatRouteImport } from './routes/chat'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as MomentsRouteImport } from './routes/moments'
+import { Route as MyReviewsRouteImport } from './routes/my-reviews'
 import { Route as PartnerRouteImport } from './routes/partner'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ReportRouteImport } from './routes/report'
@@ -68,6 +69,11 @@ const HomeRoute = HomeRouteImport.update({
 const MomentsRoute = MomentsRouteImport.update({
   id: '/moments',
   path: '/moments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MyReviewsRoute = MyReviewsRouteImport.update({
+  id: '/my-reviews',
+  path: '/my-reviews',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PartnerRoute = PartnerRouteImport.update({
@@ -169,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/explore': typeof ExploreRoute
   '/home': typeof HomeRoute
   '/moments': typeof MomentsRoute
+  '/my-reviews': typeof MyReviewsRoute
   '/partner': typeof PartnerRouteWithChildren
   '/profile': typeof ProfileRoute
   '/report': typeof ReportRoute
@@ -196,6 +203,7 @@ export interface FileRoutesByTo {
   '/explore': typeof ExploreRoute
   '/home': typeof HomeRoute
   '/moments': typeof MomentsRoute
+  '/my-reviews': typeof MyReviewsRoute
   '/partner': typeof PartnerRouteWithChildren
   '/profile': typeof ProfileRoute
   '/report': typeof ReportRoute
@@ -224,6 +232,7 @@ export interface FileRoutesById {
   '/explore': typeof ExploreRoute
   '/home': typeof HomeRoute
   '/moments': typeof MomentsRoute
+  '/my-reviews': typeof MyReviewsRoute
   '/partner': typeof PartnerRouteWithChildren
   '/profile': typeof ProfileRoute
   '/report': typeof ReportRoute
@@ -253,6 +262,7 @@ export interface FileRouteTypes {
     | '/explore'
     | '/home'
     | '/moments'
+    | '/my-reviews'
     | '/partner'
     | '/profile'
     | '/report'
@@ -280,6 +290,7 @@ export interface FileRouteTypes {
     | '/explore'
     | '/home'
     | '/moments'
+    | '/my-reviews'
     | '/partner'
     | '/profile'
     | '/report'
@@ -307,6 +318,7 @@ export interface FileRouteTypes {
     | '/explore'
     | '/home'
     | '/moments'
+    | '/my-reviews'
     | '/partner'
     | '/profile'
     | '/report'
@@ -335,6 +347,7 @@ export interface RootRouteChildren {
   ExploreRoute: typeof ExploreRoute
   HomeRoute: typeof HomeRoute
   MomentsRoute: typeof MomentsRoute
+  MyReviewsRoute: typeof MyReviewsRoute
   PartnerRoute: typeof PartnerRouteWithChildren
   ProfileRoute: typeof ProfileRoute
   ReportRoute: typeof ReportRoute
@@ -397,6 +410,13 @@ declare module '@tanstack/react-router' {
       path: '/moments'
       fullPath: '/moments'
       preLoaderRoute: typeof MomentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/my-reviews': {
+      id: '/my-reviews'
+      path: '/my-reviews'
+      fullPath: '/my-reviews'
+      preLoaderRoute: typeof MyReviewsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/partner': {
@@ -567,6 +587,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExploreRoute: ExploreRoute,
   HomeRoute: HomeRoute,
   MomentsRoute: MomentsRoute,
+  MyReviewsRoute: MyReviewsRoute,
   PartnerRoute: PartnerRouteWithChildren,
   ProfileRoute: ProfileRoute,
   ReportRoute: ReportRoute,

@@ -362,6 +362,33 @@ export const api = {
         body: JSON.stringify(data),
       }),
   },
+
+  reviews: {
+    list: (params?: { page?: number; limit?: number; sort?: string; venueId?: string; userId?: string }) =>
+      request(`/api/reviews${params ? '?' + new URLSearchParams(params as any).toString() : ''}`),
+
+    venueReviews: (venueId: string, params?: { page?: number; limit?: number; sort?: string }) =>
+      request(`/api/reviews/venue/${venueId}?${new URLSearchParams(params as any || {}).toString()}`),
+
+    myReviews: () => request('/api/reviews/my-reviews'),
+
+    create: (data: { venueId: string; rating: number; title: string; comment: string; images?: string[] }) =>
+      request('/api/reviews', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    update: (id: string, data: { rating?: number; title?: string; comment?: string; images?: string[] }) =>
+      request(`/api/reviews/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+
+    delete: (id: string) =>
+      request(`/api/reviews/${id}`, {
+        method: 'DELETE',
+      }),
+  },
 };
 
 export default api;

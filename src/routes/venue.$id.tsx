@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { SiteNav } from "@/components/moment/SiteNav";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { CATEGORY_META, formatFcfa } from "@/lib/moment-engine";
 import * as LucideIcons from "lucide-react";
 
-const { Star, MapPin, Clock, Phone, ExternalLink } = LucideIcons;
+const { Star, MapPin, Clock, Phone, ExternalLink, Trash2, Pencil, X } = LucideIcons;
+
+const API_BASE = import.meta.env['VITE_API_URL'] || 'http://localhost:5200';
 
 function getIcon(name: string) {
   return (LucideIcons as any)[name] || MapPin;
@@ -46,28 +49,35 @@ type Review = {
 
 function VenueDetail() {
   const { id } = Route.useParams();
+  const { user } = useAuth();
   const [venue, setVenue] = useState<Venue | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [reviewData, setReviewData] = useState({ rating: 5, title: '', comment: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [editingReview, setEditingReview] = useState<string | null>(null);
+  const [editData, setEditData] = useState({ rating: 5, title: '', comment: '' });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const fetchReviews = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/reviews/venue/${id}?page=1&limit=20&sort=recent`);
+      const data = await res.json();
+      if (data.success) setReviews(data.reviews);
+    } catch {}
+  }, [id]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [venueRes, reviewsRes] = await Promise.all([
           api.venues.get(id),
-          fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5200'}/api/reviews/venue/${id}?page=1&limit=10&sort=recent`)
+          fetch(`${API_BASE}/api/reviews/venue/${id}?page=1&limit=20&sort=recent`)
             .then(r => r.json())
         ]);
-
-        if (venueRes.success) {
-          setVenue(venueRes['venue']);
-        }
-        if (reviewsRes.success) {
-          setReviews(reviewsRes['reviews']);
-        }
+        if (venueRes.success) setVenue(venueRes['venue']);
+        if (reviewsRes.success) setReviews(reviewsRes['reviews']);
       } catch (error) {
         console.error('Error fetching venue data:', error);
       } finally {
@@ -81,24 +91,79 @@ function VenueDetail() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const response = await api.request('/api/reviews', {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/reviews`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
         body: JSON.stringify({
           venueId: id,
           rating: reviewData.rating,
           title: reviewData.title,
-          comment: reviewData.comment
-        })
+          comment: reviewData.comment,
+        }),
       });
-      if (response.success) {
-        setReviews([response['review'], ...reviews]);
+      const data = await res.json();
+      if (data.success) {
+        setReviews([data.review, ...reviews]);
         setShowReviewForm(false);
         setReviewData({ rating: 5, title: '', comment: '' });
+      } else {
+        console.error('Review error:', data.message);
       }
     } catch (error) {
       console.error('Error submitting review:', error);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleEditReview = async (reviewId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/reviews/${reviewId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify(editData),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setReviews(reviews.map(r => r._id === reviewId ? data.review : r));
+        setEditingReview(null);
+      }
+    } catch (error) {
+      console.error('Error editing review:', error);
+    }
+  };
+
+  const handleDeleteReview = async (reviewId: string) => {
+    setDeletingId(reviewId);
+  };
+
+  const confirmDelete = async (reviewId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/reviews/${reviewId}`, {
+        method: 'DELETE',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (data.success) {
+        setReviews(reviews.filter(r => r._id !== reviewId));
+        setDeletingId(null);
+      }
+    } catch (error) {
+      console.error('Error deleting review:', error);
     }
   };
 
@@ -280,42 +345,77 @@ function VenueDetail() {
               <div className="space-y-4">
                 {reviews.map((review) => (
                   <div key={review._id} className="surface-panel p-6">
-                    <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                        <span className="text-primary font-semibold text-sm">
-                          {review.user.firstName[0]}{review.user.lastName[0]}
-                        </span>
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-semibold">
-                            {review.user.firstName} {review.user.lastName}
-                          </span>
-                          <div className="flex gap-1">
-                            {[...Array(5)].map((_, i) => (
-                              <Star
-                                key={i}
-                                className={`h-4 w-4 ${
-                                  i < review.rating
-                                    ? 'fill-primary text-primary'
-                                    : 'text-muted-foreground'
-                                }`}
-                              />
-                            ))}
-                          </div>
+                    {editingReview === review._id ? (
+                      /* EDIT MODE */
+                      <div className="space-y-4">
+                        <div className="flex gap-2">
+                          {[1,2,3,4,5].map(s => (
+                            <button key={s} type="button" onClick={() => setEditData({...editData, rating: s})}>
+                              <Star className={`h-7 w-7 ${s <= editData.rating ? 'fill-primary text-primary' : 'text-muted-foreground'}`} />
+                            </button>
+                          ))}
                         </div>
-                        <h3 className="font-semibold mb-1">{review.title}</h3>
-                        <p className="text-muted-foreground text-sm mb-3">{review.comment}</p>
-                        {review.reply && (
-                          <div className="bg-primary/10 rounded-lg p-3 mt-3">
-                            <p className="text-xs font-semibold text-primary mb-1">
-                              Réponse de {review.reply.repliedBy.firstName} {review.reply.repliedBy.lastName}
-                            </p>
-                            <p className="text-sm">{review.reply.text}</p>
+                        <input type="text" value={editData.title} onChange={e => setEditData({...editData, title: e.target.value})} className="w-full rounded-lg border border-input bg-background px-4 py-2 text-sm" />
+                        <textarea value={editData.comment} onChange={e => setEditData({...editData, comment: e.target.value})} className="w-full rounded-lg border border-input bg-background px-4 py-2 text-sm min-h-[80px]" />
+                        <div className="flex gap-2">
+                          <button onClick={() => handleEditReview(review._id)} className="rounded-full bg-primary px-4 py-2 text-xs font-bold text-primary-foreground">Enregistrer</button>
+                          <button onClick={() => setEditingReview(null)} className="rounded-full border border-input px-4 py-2 text-xs font-bold">Annuler</button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* VIEW MODE */
+                      <div>
+                        {deletingId === review._id && (
+                          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-3">
+                            <p className="text-sm mb-3">Supprimer cet avis ?</p>
+                            <div className="flex gap-2">
+                              <button onClick={() => confirmDelete(review._id)} className="rounded-full bg-red-500 px-4 py-1.5 text-xs font-bold text-white">Supprimer</button>
+                              <button onClick={() => setDeletingId(null)} className="rounded-full border border-input px-4 py-1.5 text-xs font-bold">Annuler</button>
+                            </div>
                           </div>
                         )}
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                            <span className="text-primary font-semibold text-sm">
+                              {review.user.firstName[0]}{review.user.lastName[0]}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                              <span className="font-semibold">
+                                {review.user.firstName} {review.user.lastName}
+                              </span>
+                              <div className="flex gap-1">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star key={i} className={`h-4 w-4 ${i < review.rating ? 'fill-primary text-primary' : 'text-muted-foreground'}`} />
+                                ))}
+                              </div>
+                              <span className="text-xs text-muted-foreground">{new Date(review.createdAt).toLocaleDateString('fr-FR')}</span>
+                              {user && (user as any)._id === (review.user as any)._id && (
+                                <div className="flex gap-1 ml-auto">
+                                  <button onClick={() => { setEditingReview(review._id); setEditData({ rating: review.rating, title: review.title, comment: review.comment }); }} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </button>
+                                  <button onClick={() => handleDeleteReview(review._id)} className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors">
+                                    <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <h3 className="font-semibold mb-1">{review.title}</h3>
+                            <p className="text-muted-foreground text-sm mb-3 break-words">{review.comment}</p>
+                            {review.reply && (
+                              <div className="bg-primary/10 rounded-lg p-3 mt-3">
+                                <p className="text-xs font-semibold text-primary mb-1">
+                                  Réponse de {review.reply.repliedBy.firstName} {review.reply.repliedBy.lastName}
+                                </p>
+                                <p className="text-sm">{review.reply.text}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 ))}
               </div>

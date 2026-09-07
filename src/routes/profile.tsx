@@ -1,10 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import * as LucideIcons from "lucide-react";
-const { Camera, X, Check, User, MapPin, Calendar, Mail, Phone, Trash2, Upload } = LucideIcons;
+const { Camera, X, Check, User, MapPin, Calendar, Mail, Phone, Trash2, Upload, Star } = LucideIcons;
 const ImageIcon = LucideIcons.Image;
 
 export const Route = createFileRoute("/profile")({ ssr: false, component: Profile });
@@ -291,6 +291,22 @@ function Profile() {
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* Quick links */}
+          <div className="mt-4 space-y-3">
+            <Link
+              to="/my-reviews"
+              className="surface-panel p-4 rounded-2xl flex items-center gap-3 hover:bg-muted/50 transition-colors"
+            >
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Star className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Mes avis</p>
+                <p className="text-xs text-muted-foreground">Voir et gérer tes avis sur les lieux</p>
+              </div>
+            </Link>
           </div>
         </div>
       </div>

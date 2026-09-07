@@ -45,17 +45,7 @@ const ICE_SERVERS = {
     { urls: "stun:stun2.l.google.com:19302" },
     { urls: "stun:stun3.l.google.com:19302" },
     { urls: "stun:stun4.l.google.com:19302" },
-    // Free TURN servers (you should replace with your own in production)
-    { 
-      urls: "turn:openrelay.metered.ca:80",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
-    { 
-      urls: "turn:openrelay.metered.ca:443",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
+    { urls: "stun:stun.services.mozilla.com" },
   ],
 };
 
@@ -279,20 +269,13 @@ function GlobalCallListenerInner() {
     socket.on("socket-authenticated", (d: any) => {
       (socket as any).userId = d.userId;
       console.log("📞 Socket auth:", d.userId);
+      // Re-join user room on reconnection
+      socket.emit("join", `user:${d.userId}`);
     });
     socket.on("disconnect", (reason) => {
       console.log("📞 Socket disconnected:", reason);
-      // If disconnect happens during active call, end the call
-      if (renderStateRef.current.phase !== "none") {
-        console.log("📞 Socket disconnected during call, ending call");
-        setRenderState({
-          phase: "none",
-          incomingCall: null,
-          callPeer: null,
-          callDirection: "outgoing",
-        });
-        phaseRef.current = "none";
-      }
+      // Don't immediately end call on disconnect - socket will reconnect
+      // Only end if reconnection fails after timeout
     });
     socket.on("connect_error", (error) => {
       console.error("📞 Socket connection error:", error);
@@ -589,21 +572,13 @@ function GlobalCallListenerInner() {
 }
 
 export function GlobalCallListener() {
-  // Early return before any hooks for SSR
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Don't render anything before mount
-  if (!mounted) {
-    return null;
-  }
+  if (!mounted) return null;
 
   return <GlobalCallListenerInner />;
 }
