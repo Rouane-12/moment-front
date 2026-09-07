@@ -113,44 +113,7 @@ function GlobalCallListenerInner() {
     return () => clearTimeout(timer);
   }, [permissionsChecked]);
 
-  // ── Ringtone management (caller) ──
-  const callerAudioCtxRef = useRef<AudioContext | null>(null);
-  const callerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (renderState.phase === "active" && renderState.callDirection === "outgoing") {
-      if (!callerAudioCtxRef.current) {
-        try {
-          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-          callerAudioCtxRef.current = ctx;
-          const playTone = () => {
-            if (!callerAudioCtxRef.current) return;
-            try {
-              const osc = ctx.createOscillator();
-              const gain = ctx.createGain();
-              osc.connect(gain);
-              gain.connect(ctx.destination);
-              osc.frequency.value = 440;
-              osc.type = "sine";
-              gain.gain.setValueAtTime(0.3, ctx.currentTime);
-              gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-              osc.start(ctx.currentTime);
-              osc.stop(ctx.currentTime + 0.5);
-            } catch {}
-          };
-          playTone();
-          callerIntervalRef.current = setInterval(playTone, 1000);
-        } catch {}
-      }
-    } else {
-      if (callerIntervalRef.current) { clearInterval(callerIntervalRef.current); callerIntervalRef.current = null; }
-      if (callerAudioCtxRef.current) { try { callerAudioCtxRef.current.close(); } catch {} callerAudioCtxRef.current = null; }
-    }
-    return () => {
-      if (callerIntervalRef.current) { clearInterval(callerIntervalRef.current); callerIntervalRef.current = null; }
-      if (callerAudioCtxRef.current) { try { callerAudioCtxRef.current.close(); } catch {} callerAudioCtxRef.current = null; }
-    };
-  }, [renderState.phase, renderState.callDirection]);
+  // NOTE: Caller ringtone moved to ActiveCallOverlay — stops when call connects
 
   const endCall = useCallback((sendMissed = false) => {
     if (callEndedRef.current) {
@@ -236,8 +199,8 @@ function GlobalCallListenerInner() {
     // === PARENT-LEVEL BUFFER for call-answer and call-ice-candidate ===
     // Buffer when phase is "ringing" OR "active" — ICE arrives early during ringing!
     const handleParentAnswer = (data: any) => {
-      if (phaseRef.current !== "none") {
-        console.log("📞 Parent buffering call-answer, phase:", phaseRef.current);
+      if (phaseRef.current !== "none" && renderStateRef.current.callDirection === "outgoing") {
+        console.log("📞 Parent buffering call-answer (we are caller)");
         bufferedAnswer.current.push(data);
       }
     };
@@ -597,6 +560,36 @@ function ActiveCallOverlay({
 
   const onEndRef = useRef(onEnd);
   onEndRef.current = onEnd;
+
+  // ── Caller ringtone (plays ONLY while connecting, stops when connected) ──
+  useEffect(() => {
+    if (direction !== "outgoing" || status !== "connecting") return;
+    let ctx: AudioContext | null = null;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    try {
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const playTone = () => {
+        try {
+          const osc = ctx!.createOscillator();
+          const gain = ctx!.createGain();
+          osc.connect(gain);
+          gain.connect(ctx!.destination);
+          osc.frequency.value = 440;
+          osc.type = "sine";
+          gain.gain.setValueAtTime(0.3, ctx!.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx!.currentTime + 0.5);
+          osc.start(ctx!.currentTime);
+          osc.stop(ctx!.currentTime + 0.5);
+        } catch {}
+      };
+      playTone();
+      intervalId = setInterval(playTone, 1000);
+    } catch {}
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      try { ctx?.close(); } catch {}
+    };
+  }, [direction, status]);
 
   // Seed buffers with parent-level data
   useEffect(() => {
