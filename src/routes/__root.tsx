@@ -7,7 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, Suspense, type ReactNode } from "react";
+import { useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -133,6 +133,25 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+class SilentErrorBoundary extends Component<
+  { children: ReactNode; fallback?: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("SilentErrorBoundary caught:", error.message, info.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback ?? null;
+    }
+    return this.props.children;
+  }
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
@@ -140,9 +159,9 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <Suspense fallback={null}>
         <AuthProvider>
-          <Suspense fallback={null}>
+          <SilentErrorBoundary fallback={null}>
             <GlobalCallListener />
-          </Suspense>
+          </SilentErrorBoundary>
           <DashboardLayout>
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />
