@@ -123,7 +123,6 @@ function ChatPage() {
       setActiveGame(data.game);
       setGamePlayers(prev => {
         const next = { ...prev };
-        // Store player info from the game
         data.game.players.forEach((p: string) => {
           if (!next[p]) next[p] = { _id: p, firstName: "Joueur", lastName: "" };
         });
@@ -133,10 +132,26 @@ function ChatPage() {
 
     socket.on("game-start", (data: { game: any }) => {
       setActiveGame(data.game);
+      // Populate names from current conversation
+      if (selectedConv) {
+        setGamePlayers(prev => ({
+          ...prev,
+          [selectedConv.otherUser._id]: selectedConv.otherUser,
+          [user?.id || ""]: { _id: user?.id, firstName: user?.firstName || "Toi", lastName: user?.lastName || "" },
+        }));
+      }
     });
 
     socket.on("game-state", (data: { game: any }) => {
       setActiveGame(data.game);
+      // Keep names updated
+      if (selectedConv) {
+        setGamePlayers(prev => ({
+          ...prev,
+          [selectedConv.otherUser._id]: selectedConv.otherUser,
+          [user?.id || ""]: { _id: user?.id, firstName: user?.firstName || "Toi", lastName: user?.lastName || "" },
+        }));
+      }
     });
 
     socket.on("presence-update", (data: { userId: string; online: boolean }) => {
@@ -465,10 +480,23 @@ function ChatPage() {
   // === MINI-GAMES ===
   const handleGameSelect = (type: GameType) => {
     if (!selectedConv || !socketRef.current) return;
+    // Populate player names from conversation
+    setGamePlayers(prev => ({
+      ...prev,
+      [user?.id || ""]: { _id: user?.id, firstName: user?.firstName || "Toi", lastName: user?.lastName || "" },
+      [selectedConv.otherUser._id]: selectedConv.otherUser,
+    }));
     socketRef.current.emit("game-invite", {
       to: selectedConv.otherUser._id,
       gameType: type,
     });
+  };
+
+  const handleGameClose = () => {
+    if (activeGame && socketRef.current) {
+      socketRef.current.emit("game-close", { gameId: activeGame.id });
+    }
+    setActiveGame(null);
   };
 
   const handleGameMove = (data: any) => {
@@ -1059,13 +1087,11 @@ function ChatPage() {
 
       {/* ── ACTIVE GAME OVERLAY ── */}
       {activeGame && activeGame.state !== "waiting" && (
-        <div className="fixed inset-0 z-[250] bg-black/70 flex items-center justify-center p-4" onClick={() => { if (activeGame.state === "finished") setActiveGame(null); }}>
-          <div className="bg-[#111] border border-white/10 rounded-2xl overflow-hidden max-w-xs w-full" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[250] bg-black/70 flex items-center justify-center p-4" onClick={handleGameClose}>
+          <div className="bg-[#111] border border-white/10 rounded-2xl overflow-hidden max-w-xs w-full relative" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10">
               <span className="text-xs font-bold text-primary">🎮 {activeGame.type.toUpperCase()}</span>
-              {activeGame.state === "finished" && (
-                <button onClick={() => setActiveGame(null)} className="p-1 rounded-lg hover:bg-white/10"><X className="h-4 w-4" /></button>
-              )}
+              <button onClick={handleGameClose} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">✕</button>
             </div>
             <div className="p-4">
               <GameRenderer
@@ -1075,6 +1101,7 @@ function ChatPage() {
                 onMove={handleGameMove}
                 onRematch={handleGameRematch}
                 onNextRound={handleGameNextRound}
+                onClose={handleGameClose}
               />
             </div>
           </div>
@@ -1083,16 +1110,12 @@ function ChatPage() {
 
       {/* ── GAME INVITE CARD ── */}
       {activeGame && activeGame.state === "waiting" && (
-        <div className="fixed inset-0 z-[250] bg-black/70 flex items-center justify-center p-4" onClick={() => { if (activeGame.createdBy === user?.id) setActiveGame(null); }}>
-          <div onClick={e => e.stopPropagation()}>
-            <GameInviteCard
-              game={activeGame}
-              currentUserId={user?.id || ""}
-              onAccept={handleGameAccept}
-              onDecline={handleGameDecline}
-            />
-          </div>
-        </div>
+        <GameInviteCard
+          game={activeGame}
+          currentUserId={user?.id || ""}
+          onAccept={handleGameAccept}
+          onDecline={handleGameDecline}
+        />
       )}
     </ProtectedRoute>
   );
