@@ -79,6 +79,7 @@ function ChatPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
+  const conversationsRef = useRef<Conversation[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -119,39 +120,45 @@ function ChatPage() {
     });
 
     // === MINI-GAMES ===
+    // Helper: resolve player names from conversations list + current user
+    const resolveGamePlayers = (game: any) => {
+      const me = { _id: user?.id, firstName: user?.firstName || "Toi", lastName: user?.lastName || "" };
+      const players: Record<string, any> = { [user?.id || ""]: me };
+      game.players.forEach((pid: string) => {
+        if (pid === user?.id) { players[pid] = me; return; }
+        // Look up from conversations list (already loaded)
+        const conv = conversationsRef.current.find(c => c.otherUser._id === pid);
+        if (conv) {
+          players[pid] = conv.otherUser;
+        } else {
+          players[pid] = { _id: pid, firstName: "Joueur", lastName: "" };
+        }
+      });
+      return players;
+    };
+
     socket.on("game-invite", (data: { game: any; from: string }) => {
       setActiveGame(data.game);
-      setGamePlayers(prev => {
-        const next = { ...prev };
-        data.game.players.forEach((p: string) => {
-          if (!next[p]) next[p] = { _id: p, firstName: "Joueur", lastName: "" };
-        });
-        return next;
-      });
+      setGamePlayers(resolveGamePlayers(data.game));
     });
 
     socket.on("game-start", (data: { game: any }) => {
       setActiveGame(data.game);
-      // Populate names from current conversation
-      if (selectedConv) {
-        setGamePlayers(prev => ({
-          ...prev,
-          [selectedConv.otherUser._id]: selectedConv.otherUser,
-          [user?.id || ""]: { _id: user?.id, firstName: user?.firstName || "Toi", lastName: user?.lastName || "" },
-        }));
-      }
+      setGamePlayers(resolveGamePlayers(data.game));
     });
 
     socket.on("game-state", (data: { game: any }) => {
       setActiveGame(data.game);
-      // Keep names updated
-      if (selectedConv) {
-        setGamePlayers(prev => ({
-          ...prev,
-          [selectedConv.otherUser._id]: selectedConv.otherUser,
-          [user?.id || ""]: { _id: user?.id, firstName: user?.firstName || "Toi", lastName: user?.lastName || "" },
-        }));
-      }
+      // Merge — don't overwrite existing good names
+      setGamePlayers(prev => {
+        const resolved = resolveGamePlayers(data.game);
+        // Keep any names we already have (they're better than defaults)
+        const merged = { ...resolved };
+        Object.keys(prev).forEach(k => {
+          if (prev[k]?.firstName && prev[k].firstName !== "Joueur") merged[k] = prev[k];
+        });
+        return merged;
+      });
     });
 
     socket.on("presence-update", (data: { userId: string; online: boolean }) => {
@@ -176,6 +183,9 @@ function ChatPage() {
   }, []);
 
   useEffect(() => { loadConversations(); }, [loadConversations]);
+
+  // Keep conversationsRef in sync for socket handlers
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
 
   const loadMessages = useCallback(async (convId: string) => {
     try {
@@ -480,12 +490,9 @@ function ChatPage() {
   // === MINI-GAMES ===
   const handleGameSelect = (type: GameType) => {
     if (!selectedConv || !socketRef.current) return;
-    // Populate player names from conversation
-    setGamePlayers(prev => ({
-      ...prev,
-      [user?.id || ""]: { _id: user?.id, firstName: user?.firstName || "Toi", lastName: user?.lastName || "" },
-      [selectedConv.otherUser._id]: selectedConv.otherUser,
-    }));
+    // Populate player names immediately
+    const me = { _id: user?.id, firstName: user?.firstName || "Toi", lastName: user?.lastName || "" };
+    setGamePlayers({ [user?.id || ""]: me, [selectedConv.otherUser._id]: selectedConv.otherUser });
     socketRef.current.emit("game-invite", {
       to: selectedConv.otherUser._id,
       gameType: type,

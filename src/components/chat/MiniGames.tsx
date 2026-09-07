@@ -428,28 +428,30 @@ function RPSGame({
 // DICE DUEL
 // ══════════════════════════════════════
 function DiceGame({
-  game, currentUserId, players, onMove, onRematch, onClose,
+  game, currentUserId, players, onMove, onRematch, onNextRound, onClose,
 }: {
   game: GameState; currentUserId: string;
   players: Record<string, GamePlayer>;
   onMove: (move: string) => void;
-  onRematch: () => void; onClose: () => void;
+  onRematch: () => void; onNextRound: () => void; onClose: () => void;
 }) {
   const p1 = game.players[0], p2 = game.players[1];
   const myRoll = game.moves?.[currentUserId];
   const [rolling, setRolling] = useState(false);
+  const rollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (game.phase === "rolling" && !myRoll) {
-      setRolling(true);
-      const t = setTimeout(() => setRolling(false), 1500);
-      return () => clearTimeout(t);
-    }
-  }, [game.phase, game.currentRound]);
+  useEffect(() => () => {
+    if (rollTimerRef.current) clearTimeout(rollTimerRef.current);
+  }, []);
 
   const handleRoll = () => {
+    if (rolling || myRoll || game.phase !== "rolling") return;
+    // Short spin for visual feedback, then send the roll right away
     setRolling(true);
-    setTimeout(() => onMove("roll"), 1200);
+    rollTimerRef.current = setTimeout(() => {
+      setRolling(false);
+      onMove("roll");
+    }, 450);
   };
 
   if (game.state === "finished") {
@@ -520,6 +522,9 @@ function DiceGame({
            game.roundWinner === currentUserId ? "✅ Tu gagnes cette manche !" :
            <><PlayerName id={game.roundWinner!} players={players} /> gagne cette manche !</>}
         </p>
+        <button onClick={onNextRound} className="mt-3 px-5 py-2 rounded-full bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-colors">
+          Manche suivante →
+        </button>
       </div>
     );
   }
@@ -574,7 +579,7 @@ export function GameRenderer({
     case "rps":
       return <RPSGame game={game} {...common} onMove={(choice) => onMove({ gameId: game.id, choice })} onRematch={onRematch} onNextRound={onNextRound} />;
     case "dice":
-      return <DiceGame game={game} {...common} onMove={(move) => onMove({ gameId: game.id, move })} onRematch={onRematch} />;
+      return <DiceGame game={game} {...common} onMove={(move) => onMove({ gameId: game.id, move })} onRematch={onRematch} onNextRound={onNextRound} />;
     default:
       return <p className="text-sm text-muted-foreground text-center">Jeu non supporté</p>;
   }
