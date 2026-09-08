@@ -1095,12 +1095,12 @@ function ChatPage() {
       {/* ── ACTIVE GAME OVERLAY ── */}
       {activeGame && activeGame.state !== "waiting" && (
         <div className="fixed inset-0 z-[250] bg-black/70 flex items-center justify-center p-4" onClick={handleGameClose}>
-          <div className="bg-[#111] border border-white/10 rounded-2xl overflow-hidden max-w-xs w-full relative" onClick={e => e.stopPropagation()}>
+          <div className={`bg-[#111] border border-white/10 rounded-2xl overflow-hidden w-full relative ${activeGame.type === "quiz" ? "max-w-lg" : "max-w-xs"}`} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10">
               <span className="text-xs font-bold text-primary">🎮 {activeGame.type.toUpperCase()}</span>
               <button onClick={handleGameClose} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">✕</button>
             </div>
-            <div className="p-4">
+            <div className={`${activeGame.type === "quiz" ? "p-3 max-h-[85vh] overflow-y-auto" : "p-4"}`}>
               <GameRenderer
                 game={activeGame}
                 currentUserId={user?.id || ""}
