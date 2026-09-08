@@ -74,7 +74,7 @@ export function EmojiPicker({ onSelect, onClose }: Props) {
 
   return (
     <div ref={pickerRef}
-      className="absolute bottom-full left-0 mb-2 w-[320px] sm:w-[360px] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
+      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[320px] sm:w-[360px] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
         <Smile className="h-4 w-4 text-primary" />
