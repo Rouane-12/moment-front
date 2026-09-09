@@ -456,7 +456,12 @@ function ChatPage() {
 
   const handleAcceptInviteLink = async () => {
     try {
-      const res = await api.chat.acceptInvitationLink(inviteToken);
+      // L'utilisateur peut coller le lien complet au lieu du code seul : on extrait le token.
+      let raw = (inviteToken || "").trim();
+      const m = raw.match(/[?&]invite=([0-9a-fA-F]+)/);
+      if (m) raw = m[1] || "";
+      if (!raw) return;
+      const res = await api.chat.acceptInvitationLink(raw);
       if (res.success) {
         loadConversations();
         if ((res as any).user) {
@@ -470,19 +475,21 @@ function ChatPage() {
         }
         setShowInviteInput(false);
         setInviteToken("");
+        // Lien accepté : on peut retirer le paramètre de l'URL.
+        window.history.replaceState({}, document.title, window.location.pathname);
       }
     } catch (e: any) { alert(e.message || "Lien invalide ou expiré"); }
   };
 
-  // Check for invite token in URL on mount
+  // Check for invite token in URL on mount.
+  // On ne retire PAS le paramètre immédiatement : s'il y a eu une redirection
+  // de connexion ou un rechargement, il sera recapturé. Il est retiré à l'acceptation.
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const inviteToken = urlParams.get('invite');
     if (inviteToken) {
       setInviteToken(inviteToken);
       setShowInviteInput(true);
-      // Clear the URL parameter
-      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
@@ -815,7 +822,7 @@ function ChatPage() {
                   <button onClick={handleCopyInviteLink} className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors">
                     Copier le lien
                   </button>
-                  <p className="text-[10px] text-muted-foreground mt-2">Valide 5 minutes</p>
+                  <p className="text-[10px] text-muted-foreground mt-2">Valide 24 heures</p>
                 </div>
               </div>
             )}
@@ -827,10 +834,10 @@ function ChatPage() {
                     <h2 className="font-bold text-sm">Rejoindre via lien</h2>
                     <button onClick={() => { setShowInviteInput(false); setInviteToken(""); }} className="p-1 rounded-lg hover:bg-white/10"><X className="h-5 w-5" /></button>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mb-3">Collez le lien d'invitation que vous avez reçu</p>
+                  <p className="text-[11px] text-muted-foreground mb-3">Collez le lien d'invitation reçu (ou son code)</p>
                   <input
                     type="text"
-                    placeholder="https://..."
+                    placeholder="https://moment-front.vercel.app/chat?invite=..."
                     value={inviteToken}
                     onChange={(e) => setInviteToken(e.target.value)}
                     className="w-full px-3 py-2.5 rounded-xl border border-white/10 bg-white/5 focus:outline-none focus:border-primary text-sm mb-3"
@@ -1098,7 +1105,7 @@ function ChatPage() {
         )}
 
         {/* ── INPUT BAR (sticky, NEVER scrolls) ── */}
-        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-white/10 px-2 pt-2 pb-4 sm:pb-3 safe-area-pb z-10">
+        <div className="relative shrink-0 bg-background/80 backdrop-blur-xl border-t border-white/10 px-2 pt-2 pb-4 sm:pb-3 safe-area-pb z-10">
           {isRecording ? (
             <div className="flex items-center gap-3 px-3 py-2">
               <div className="flex items-center gap-2 flex-1">
@@ -1133,7 +1140,9 @@ function ChatPage() {
                 <Paperclip className="h-5 w-5" />
               </label>
 
-              <div className="relative">
+              {/* Le picker est ancré à la barre de saisie (relative ci-dessus) :
+                  il reste centré et jamais coupé, même en responsive. */}
+              <div>
                 <button onClick={() => setShowEmoji(!showEmoji)}
                   className="p-2 rounded-xl hover:bg-white/10 transition-colors text-muted-foreground shrink-0"
                   title="Emoji">

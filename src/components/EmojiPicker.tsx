@@ -74,7 +74,7 @@ export function EmojiPicker({ onSelect, onClose }: Props) {
 
   return (
     <div ref={pickerRef}
-      className="absolute bottom-full left-0 right-0 sm:left-1/2 sm:-translate-x-1/2 sm:right-auto sm:w-[360px] mb-2 mx-2 sm:mx-0 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
+      className="absolute bottom-full left-0 right-0 mx-auto mb-2 w-[min(360px,calc(100%-1.5rem))] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
         <Smile className="h-4 w-4 text-primary" />
@@ -102,8 +102,8 @@ export function EmojiPicker({ onSelect, onClose }: Props) {
 
       {/* Emoji grid */}
       <div className="p-2 h-[200px] overflow-y-auto">
-        <div className="grid grid-cols-6 sm:grid-cols-8 gap-0.5">
-          {(search ? filteredCategories[0].emojis : EMOJI_CATEGORIES[activeCategory]?.emojis || []).map((emoji, i) => (
+        <div className="grid grid-cols-5 sm:grid-cols-8 gap-0.5">
+          {(search ? filteredCategories[0]?.emojis || [] : EMOJI_CATEGORIES[activeCategory]?.emojis || []).map((emoji, i) => (
             <button key={`${emoji}-${i}`} onClick={() => onSelect(emoji)}
               className="w-9 h-9 flex items-center justify-center text-xl rounded-lg hover:bg-white/10 transition-colors">
               {emoji}
