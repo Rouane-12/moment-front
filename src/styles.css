@@ -397,3 +397,19 @@ select,
   display: none;
 }
 
+/* ---------- Cursor pointer for interactive elements ---------- */
+button,
+a,
+[role="button"],
+input[type="button"],
+input[type="submit"],
+label {
+  cursor: pointer;
+}
+
+/* Ensure clickable divs also have pointer cursor */
+.clickable,
+.interactive {
+  cursor: pointer;
+}
+
