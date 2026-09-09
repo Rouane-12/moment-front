@@ -368,6 +368,17 @@ export const api = {
       request(`/api/chat/block/${userId}`, {
         method: 'POST',
       }),
+
+    generateInvitationLink: () =>
+      request('/api/chat/generate-invitation-link', {
+        method: 'POST',
+      }),
+
+    acceptInvitationLink: (token: string) =>
+      request('/api/chat/accept-invitation-link', {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+      }),
   },
 
   reports: {

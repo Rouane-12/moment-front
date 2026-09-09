@@ -76,6 +76,10 @@ function ChatPage() {
   const [showGameMenu, setShowGameMenu] = useState(false);
   const [activeGame, setActiveGame] = useState<any>(null);
   const [gamePlayers, setGamePlayers] = useState<Record<string, any>>({});
+  const [showInviteLink, setShowInviteLink] = useState(false);
+  const [inviteLink, setInviteLink] = useState("");
+  const [showInviteInput, setShowInviteInput] = useState(false);
+  const [inviteToken, setInviteToken] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -434,6 +438,54 @@ function ChatPage() {
     setShowScanner(false);
   }, []);
 
+  // === INVITATION LINK ===
+  const handleGenerateInviteLink = async () => {
+    try {
+      const res = await api.chat.generateInvitationLink();
+      if (res.success) {
+        setInviteLink((res as any).link);
+        setShowInviteLink(true);
+      }
+    } catch (e) { console.error(e); alert("Erreur lors de la génération du lien"); }
+  };
+
+  const handleCopyInviteLink = () => {
+    navigator.clipboard.writeText(inviteLink);
+    alert("Lien copié !");
+  };
+
+  const handleAcceptInviteLink = async () => {
+    try {
+      const res = await api.chat.acceptInvitationLink(inviteToken);
+      if (res.success) {
+        loadConversations();
+        if ((res as any).user) {
+          const convId = [user?.id, (res as any).user._id].sort().join("_");
+          setSelectedConv({
+            conversationId: (res as any).conversationId || convId,
+            otherUser: (res as any).user,
+            lastMessage: { content: "Connecté via lien !", createdAt: new Date().toISOString(), sender: "" },
+            unreadCount: 0,
+          });
+        }
+        setShowInviteInput(false);
+        setInviteToken("");
+      }
+    } catch (e: any) { alert(e.message || "Lien invalide ou expiré"); }
+  };
+
+  // Check for invite token in URL on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const inviteToken = urlParams.get('invite');
+    if (inviteToken) {
+      setInviteToken(inviteToken);
+      setShowInviteInput(true);
+      // Clear the URL parameter
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   useEffect(() => {
     return () => { if (scannerRef.current) { try { scannerRef.current.stop(); } catch {} } };
   }, []);
@@ -617,6 +669,16 @@ function ChatPage() {
                   </button>
                 ) : (
                   <>
+                    <button onClick={handleGenerateInviteLink}
+                      className="p-2.5 rounded-xl bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
+                      title="Lien d'invitation">
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    </button>
+                    <button onClick={() => setShowInviteInput(true)}
+                      className="p-2.5 rounded-xl bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors"
+                      title="Rejoindre via lien">
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                    </button>
                     <button onClick={handleGenerateQR}
                       className="p-2.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                       title="Mon QR code">
@@ -735,6 +797,47 @@ function ChatPage() {
                     <div id="qr-scanner-region" className="w-full rounded-xl overflow-hidden" />
                     <p className="text-[11px] text-muted-foreground text-center mt-2">Pointez la caméra vers un QR code</p>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {showInviteLink && (
+              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => { setShowInviteLink(false); setInviteLink(""); }}>
+                <div className="bg-[#111] rounded-2xl max-w-sm w-full p-5 text-center border border-white/10" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center mb-3">
+                    <h2 className="font-bold">Lien d'invitation</h2>
+                    <button onClick={() => { setShowInviteLink(false); setInviteLink(""); }} className="p-1 rounded-lg hover:bg-white/10"><X className="h-5 w-5" /></button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mb-4">Partagez ce lien pour vous connecter à distance</p>
+                  <div className="bg-white/5 rounded-xl p-3 mb-3 break-all text-xs text-primary">
+                    {inviteLink}
+                  </div>
+                  <button onClick={handleCopyInviteLink} className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors">
+                    Copier le lien
+                  </button>
+                  <p className="text-[10px] text-muted-foreground mt-2">Valide 5 minutes</p>
+                </div>
+              </div>
+            )}
+
+            {showInviteInput && (
+              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => { setShowInviteInput(false); setInviteToken(""); }}>
+                <div className="bg-[#111] rounded-2xl max-w-sm w-full p-5 border border-white/10" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center mb-3">
+                    <h2 className="font-bold text-sm">Rejoindre via lien</h2>
+                    <button onClick={() => { setShowInviteInput(false); setInviteToken(""); }} className="p-1 rounded-lg hover:bg-white/10"><X className="h-5 w-5" /></button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mb-3">Collez le lien d'invitation que vous avez reçu</p>
+                  <input
+                    type="text"
+                    placeholder="https://..."
+                    value={inviteToken}
+                    onChange={(e) => setInviteToken(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-white/10 bg-white/5 focus:outline-none focus:border-primary text-sm mb-3"
+                  />
+                  <button onClick={handleAcceptInviteLink} className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors">
+                    Rejoindre
+                  </button>
                 </div>
               </div>
             )}
