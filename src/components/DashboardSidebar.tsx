@@ -6,7 +6,7 @@ import * as LucideIcons from "lucide-react";
 const {
   Home, Compass, Plus, Calendar, Settings, LogOut, Menu, X, User,
   Building2, Users, MapPin, AlertTriangle, FileText, BarChart3,
-  MessageCircle,
+  MessageCircle, Gamepad2, Trophy,
 } = LucideIcons;
 
 const userMenu = [
@@ -15,6 +15,7 @@ const userMenu = [
   { to: "/moment/create", icon: Plus, label: "Créer un moment" },
   { to: "/moments", icon: Calendar, label: "Mes moments" },
   { to: "/chat", icon: MessageCircle, label: "Messages" },
+  { to: "/games", icon: Gamepad2, label: "Jeux" },
   { to: "/profile", icon: User, label: "Mon profil" },
 ];
 

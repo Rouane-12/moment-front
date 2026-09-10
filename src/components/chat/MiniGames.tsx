@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 const DICE_FACES = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 const RPS_EMOJI: Record<string, string> = { rock: "✊", paper: "✋", scissors: "✌️" };
 
-export type GameType = "reflex" | "tictactoe" | "rps" | "dice" | "quiz";
+export type GameType = "reflex" | "tictactoe" | "rps" | "dice" | "quiz" | "code_secret" | "mot_intrus" | "devine_ce_que_je_pense" | "a_quel_point" | "deux_verites";
 
 export interface QuizQuestion {
   id: string;
@@ -70,32 +70,70 @@ function PlayerName({ id, players }: { id: string; players: Record<string, GameP
 // ══════════════════════════════════════
 // GAME MENU POPUP
 // ══════════════════════════════════════
+import * as LucideIcons from "lucide-react";
+
+const iconMap: Record<string, any> = {
+  Brain: LucideIcons.Brain,
+  Zap: LucideIcons.Zap,
+  Lock: LucideIcons.Lock,
+  Search: LucideIcons.Search,
+  Lightbulb: LucideIcons.Lightbulb,
+  Heart: LucideIcons.Heart,
+  Mask: LucideIcons.UserX,
+  Hand: LucideIcons.Hand,
+  Dice1: LucideIcons.Dice1,
+  Grid3X3: LucideIcons.Grid3X3,
+  Target: LucideIcons.Target,
+};
+
 export function GameMenu({ onSelect, onClose }: { onSelect: (type: GameType) => void; onClose: () => void }) {
-  const games: { type: GameType; icon: string; name: string; desc: string }[] = [
-    { type: "quiz", icon: "🧠", name: "Quiz", desc: "Culture générale · 20 questions · IA" },
-    { type: "reflex", icon: "⚡", name: "Réflexe", desc: "Le plus rapide gagne" },
-    { type: "tictactoe", icon: "❌", name: "Morpion", desc: "Aligne 3 symboles" },
-    { type: "rps", icon: "✊", name: "Pierre-Feuille-Ciseaux", desc: "Le classique" },
-    { type: "dice", icon: "🎲", name: "Duel de dés", desc: "Meilleur score en 3 manches" },
+  const games: { type: GameType; icon: string; name: string; desc: string; category: string }[] = [
+    // Jeux de reflexes
+    { type: "reflex", icon: "Zap", name: "Le Reflexe", desc: "Le plus rapide gagne", category: "Reflexes" },
+    { type: "dice", icon: "Dice1", name: "Duel de Des", desc: "Meilleur score en 3 manches", category: "Reflexes" },
+    { type: "rps", icon: "Hand", name: "Pierre-Feuille-Ciseaux", desc: "Le classique", category: "Reflexes" },
+    // Jeux de logique
+    { type: "tictactoe", icon: "Grid3X3", name: "Morpion", desc: "Aligne 3 symboles", category: "Logique" },
+    { type: "quiz", icon: "Brain", name: "Quiz Culture", desc: "20 questions de culture generale", category: "Culture" },
+    { type: "code_secret", icon: "Lock", name: "Le Code Secret", desc: "Devinez le code en 4 symboles", category: "Logique" },
+    { type: "mot_intrus", icon: "Search", name: "Le Mot Intrus", desc: "Trouvez le mot different", category: "Logique" },
+    // Jeux sociaux
+    { type: "devine_ce_que_je_pense", icon: "Lightbulb", name: "Devine ce que je pense", desc: "Questions Oui/Non pour deviner", category: "Social" },
+    { type: "a_quel_point", icon: "Heart", name: "A quel point tu me connais ?", desc: "Test de compatibilite", category: "Social" },
+    { type: "deux_verites", icon: "Mask", name: "Deux Verites, Un Mensonge", desc: "Trouvez le mensonge", category: "Bluff" },
   ];
+
+  const categories = [...new Set(games.map(g => g.category))];
 
   return (
     <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-[#111] border border-white/10 rounded-2xl w-full max-w-xs overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="bg-[#111] border border-white/10 rounded-2xl w-full max-w-sm max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-          <span className="font-bold text-sm">🎮 JOUER</span>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">✕</button>
+          <span className="font-bold text-sm">Jouer</span>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+            <LucideIcons.X className="h-4 w-4" />
+          </button>
         </div>
-        <div className="p-2">
-          {games.map(g => (
-            <button key={g.type} onClick={() => { onSelect(g.type); onClose(); }}
-              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-white/5 transition-colors text-left">
-              <span className="text-xl w-8 text-center">{g.icon}</span>
-              <div>
-                <p className="text-sm font-semibold">{g.name}</p>
-                <p className="text-[11px] text-muted-foreground">{g.desc}</p>
-              </div>
-            </button>
+        <div className="p-2 overflow-y-auto max-h-[calc(80vh-60px)]">
+          {categories.map(cat => (
+            <div key={cat} className="mb-2">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase px-3 py-1">{cat}</p>
+              {games.filter(g => g.category === cat).map(g => {
+                const IconComp = iconMap[g.icon] || LucideIcons.Gamepad2;
+                return (
+                  <button key={g.type} onClick={() => { onSelect(g.type); onClose(); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors text-left">
+                    <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                      <IconComp className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">{g.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{g.desc}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           ))}
         </div>
       </div>
@@ -107,8 +145,16 @@ export function GameMenu({ onSelect, onClose }: { onSelect: (type: GameType) => 
 // GAME INVITE CARD
 // ══════════════════════════════════════
 const GAME_NAMES: Record<GameType, string> = {
-  reflex: "⚡ Réflexe", tictactoe: "❌ Morpion",
-  rps: "✊ Pierre-Feuille-Ciseaux", dice: "🎲 Duel de dés", quiz: "🧠 Quiz",
+  reflex: "Le Reflexe",
+  tictactoe: "Morpion",
+  rps: "Pierre-Feuille-Ciseaux",
+  dice: "Duel de Des",
+  quiz: "Quiz Culture",
+  code_secret: "Le Code Secret",
+  mot_intrus: "Le Mot Intrus",
+  devine_ce_que_je_pense: "Devine ce que je pense",
+  a_quel_point: "A quel point tu me connais ?",
+  deux_verites: "Deux Verites, Un Mensonge",
 };
 
 export function GameInviteCard({
@@ -810,6 +856,386 @@ function QuizGame({
       <button onClick={onClose} className="absolute -top-1 -right-1 p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground text-sm z-10">✕</button>
       <div className="animate-spin rounded-full h-7 w-7 border-2 border-primary border-t-transparent mx-auto" />
     </div>
+  );
+}
+
+// ══════════════════════════════════════
+// GENERIC GAME WRAPPER
+// ══════════════════════════════════════
+function GenericGameWrapper({
+  game, currentUserId, players, onMove, onRematch, onClose, title, children,
+}: {
+  game: GameState; currentUserId: string;
+  players: Record<string, GamePlayer>;
+  onMove: (data: any) => void; onRematch: () => void; onClose: () => void;
+  title: string; children: React.ReactNode;
+}) {
+  const p1 = game.players[0] ?? "", p2 = game.players[1] ?? "";
+  
+  if (game.state === "finished") {
+    const win = game.winner;
+    return (
+      <div className="mx-auto max-w-[340px] text-center relative">
+        <button onClick={onClose} className="absolute -top-1 -right-1 p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground text-sm z-10">
+          <LucideIcons.X className="h-4 w-4" />
+        </button>
+        <p className="text-lg mb-3">FIN DE LA PARTIE</p>
+        <div className="flex justify-around mb-4">
+          <div className={win === p1 ? "text-primary" : ""}>
+            <p className="text-xs text-muted-foreground"><PlayerName id={p1} players={players} /></p>
+            <p className="text-3xl font-black">{game.scores[p1]}</p>
+          </div>
+          <div className="text-muted-foreground self-center text-lg">-</div>
+          <div className={win === p2 ? "text-primary" : ""}>
+            <p className="text-xs text-muted-foreground"><PlayerName id={p2} players={players} /></p>
+            <p className="text-3xl font-black">{game.scores[p2]}</p>
+          </div>
+        </div>
+        <p className="text-sm font-semibold text-primary mb-3">
+          {win === "draw" ? "Match nul !" :
+           win === currentUserId ? "Tu gagnes !" :
+           <><PlayerName id={win || ""} players={players} /> gagne !</>}
+        </p>
+        <button onClick={onRematch} className="px-5 py-2 rounded-full bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-colors">
+          Revanche
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-[340px] text-center relative">
+      <button onClick={onClose} className="absolute -top-1 -right-1 p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground text-sm z-10">
+        <LucideIcons.X className="h-4 w-4" />
+      </button>
+      <p className="text-sm font-bold mb-2">{title}</p>
+      <div className="flex justify-around mb-3">
+        <div className={game.scores[p1] > game.scores[p2] ? "text-primary" : ""}>
+          <p className="text-[11px] text-muted-foreground"><PlayerName id={p1} players={players} /></p>
+          <p className="text-xl font-bold">{game.scores[p1]}</p>
+        </div>
+        <div className={game.scores[p2] > game.scores[p1] ? "text-primary" : ""}>
+          <p className="text-[11px] text-muted-foreground"><PlayerName id={p2} players={players} /></p>
+          <p className="text-xl font-bold">{game.scores[p2]}</p>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════
+// CODE SECRET GAME
+// ══════════════════════════════════════
+const CS_SYMBOLS = ["🔴", "🟢", "🔵", "🟡", "🟣", "🟠"];
+
+function CodeSecretGame({
+  game, currentUserId, players, onMove, onRematch, onClose,
+}: {
+  game: GameState; currentUserId: string; players: Record<string, GamePlayer>;
+  onMove: (data: any) => void; onRematch: () => void; onClose: () => void;
+}) {
+  const [currentGuess, setCurrentGuess] = useState<string[]>([]);
+  const isMyTurn = game.currentGuesser === currentUserId;
+  
+  const addSymbol = (symbol: string) => {
+    if (currentGuess.length >= 4) return;
+    setCurrentGuess([...currentGuess, symbol]);
+  };
+  
+  const removeLast = () => {
+    setCurrentGuess(currentGuess.slice(0, -1));
+  };
+  
+  const submitGuess = () => {
+    if (currentGuess.length !== 4) return;
+    onMove({ gameId: game.id, move: "guess", guess: currentGuess });
+    setCurrentGuess([]);
+  };
+
+  return (
+    <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Le Code Secret">
+      {game.attempts && game.attempts.length > 0 && (
+        <div className="mb-4 space-y-1">
+          {game.attempts.map((attempt: any, i: number) => (
+            <div key={i} className="flex items-center gap-2 text-sm">
+              <span className="text-[10px] text-muted-foreground w-4">{i + 1}.</span>
+              <div className="flex gap-1">
+                {attempt.guess.map((s: string, j: number) => {
+                  const result = attempt.result?.[j];
+                  const bgColor = result?.status === 'correct' ? 'bg-green-500/30' :
+                                  result?.status === 'wrong_position' ? 'bg-orange-500/30' : 'bg-white/10';
+                  return <span key={j} className={`px-2 py-1 rounded ${bgColor}`}>{s}</span>;
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isMyTurn && game.phase === 'guessing' && (
+        <div>
+          <div className="flex justify-center gap-2 mb-3">
+            {currentGuess.map((s, i) => (
+              <span key={i} className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-lg">{s}</span>
+            ))}
+            {Array.from({ length: 4 - currentGuess.length }).map((_, i) => (
+              <span key={`empty-${i}`} className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center text-muted-foreground text-xs">?</span>
+            ))}
+          </div>
+          <div className="flex justify-center gap-2 mb-3">
+            {CS_SYMBOLS.map(s => (
+              <button key={s} onClick={() => addSymbol(s)} className="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-lg transition-colors">{s}</button>
+            ))}
+          </div>
+          <div className="flex justify-center gap-2">
+            <button onClick={removeLast} className="px-4 py-2 rounded-lg bg-white/10 text-sm">Retour</button>
+            <button onClick={submitGuess} disabled={currentGuess.length !== 4}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-bold disabled:opacity-40">
+              Valider
+            </button>
+          </div>
+        </div>
+      )}
+
+      {game.phase === 'setting_code' && (
+        <p className="text-[11px] text-muted-foreground">Le createur du code prepare la partie...</p>
+      )}
+
+      {!isMyTurn && game.phase === 'guessing' && (
+        <p className="text-[11px] text-muted-foreground">En attente de l'adversaire...</p>
+      )}
+    </GenericGameWrapper>
+  );
+}
+
+// ══════════════════════════════════════
+// MOT INTRUS GAME
+// ══════════════════════════════════════
+function MotIntrusGame({
+  game, currentUserId, players, onMove, onRematch, onClose,
+}: {
+  game: GameState; currentUserId: string; players: Record<string, GamePlayer>;
+  onMove: (data: any) => void; onRematch: () => void; onClose: () => void;
+}) {
+  const isMyTurn = game.currentPlayer === currentUserId;
+  const question = game.currentQuestion;
+
+  return (
+    <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Le Mot Intrus">
+      <p className="text-[11px] text-muted-foreground mb-3">Manche {game.currentRound}/{game.maxRounds}</p>
+
+      {question && question.words && (
+        <div className="grid grid-cols-1 gap-2 mb-4">
+          {question.words.map((word: string, i: number) => (
+            <button key={i} onClick={() => isMyTurn && onMove({ gameId: game.id, move: 'answer', answerIndex: i })}
+              disabled={!isMyTurn || game.phase !== 'playing'}
+              className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-medium hover:bg-primary/20 hover:border-primary/40 transition-all disabled:opacity-50">
+              {word}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {game.phase === 'result' && game.lastResult && (
+        <div className={`p-3 rounded-xl ${game.lastResult.correct ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+          <p className="text-sm font-semibold mb-1">{game.lastResult.correct ? "Correct !" : "Faux !"}</p>
+          <p className="text-[11px] text-muted-foreground">{game.lastResult.explanation}</p>
+        </div>
+      )}
+    </GenericGameWrapper>
+  );
+}
+
+// ══════════════════════════════════════
+// DEVINE CE QUE JE PENSE
+// ══════════════════════════════════════
+function DevineGame({
+  game, currentUserId, players, onMove, onRematch, onClose,
+}: {
+  game: GameState; currentUserId: string; players: Record<string, GamePlayer>;
+  onMove: (data: any) => void; onRematch: () => void; onClose: () => void;
+}) {
+  const [questionText, setQuestionText] = useState("");
+  const isThinker = game.thinker === currentUserId;
+  const isGuesser = game.guesser === currentUserId;
+
+  return (
+    <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Devine ce que je pense">
+      <p className="text-[11px] text-muted-foreground mb-3">
+        {game.category?.icon || ""} Categorie: {game.category?.name || "???"}
+      </p>
+
+      {isThinker && (
+        <div className="mb-4 p-3 rounded-xl bg-primary/10 border border-primary/30">
+          <p className="text-[11px] text-muted-foreground mb-1">Votre mot secret :</p>
+          <p className="text-lg font-bold text-primary">{game.secretItem}</p>
+          <p className="text-[10px] text-muted-foreground mt-1">Repondez Oui ou Non aux questions</p>
+        </div>
+      )}
+
+      {game.lastAnswer && (
+        <div className="mb-4 p-3 rounded-xl bg-white/5">
+          <p className="text-[11px] text-muted-foreground">{game.lastAnswer.question}</p>
+          <p className="text-sm font-semibold">{game.lastAnswer.answer}</p>
+        </div>
+      )}
+
+      {isGuesser && game.phase === 'asking' && (
+        <div className="flex gap-2">
+          <input type="text" value={questionText} onChange={e => setQuestionText(e.target.value)}
+            placeholder="Votre question..."
+            className="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm focus:outline-none focus:border-primary"
+            onKeyDown={e => { if (e.key === 'Enter' && questionText.trim()) {
+              onMove({ gameId: game.id, move: 'question', question: questionText });
+              setQuestionText("");
+            }}}
+          />
+          <button onClick={() => { if (questionText.trim()) {
+            onMove({ gameId: game.id, move: 'question', question: questionText });
+            setQuestionText("");
+          }}} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-bold">
+            Envoyer
+          </button>
+        </div>
+      )}
+
+      {isThinker && game.phase === 'answering' && (
+        <div className="flex gap-2 justify-center">
+          <button onClick={() => onMove({ gameId: game.id, move: 'answer', answer: 'Oui' })}
+            className="px-6 py-3 rounded-xl bg-green-500 text-white font-bold">Oui</button>
+          <button onClick={() => onMove({ gameId: game.id, move: 'answer', answer: 'Non' })}
+            className="px-6 py-3 rounded-xl bg-red-500 text-white font-bold">Non</button>
+        </div>
+      )}
+
+      {isGuesser && game.phase === 'asking' && (
+        <div className="mt-3">
+          <button onClick={() => {
+            const guess = prompt("Quel est votre guess ?");
+            if (guess) onMove({ gameId: game.id, move: 'guess', guess });
+          }} className="px-4 py-2 rounded-xl bg-yellow-500/20 text-yellow-400 text-sm font-semibold">
+            Proposer une reponse
+          </button>
+        </div>
+      )}
+
+      <p className="text-[10px] text-muted-foreground mt-3">Question {game.questionCount}/{game.maxQuestions}</p>
+    </GenericGameWrapper>
+  );
+}
+
+// ══════════════════════════════════════
+// A QUEL POINT TU ME CONNAIS
+// ══════════════════════════════════════
+function AQuelPointGame({
+  game, currentUserId, players, onMove, onRematch, onClose,
+}: {
+  game: GameState; currentUserId: string; players: Record<string, GamePlayer>;
+  onMove: (data: any) => void; onRematch: () => void; onClose: () => void;
+}) {
+  const isSetting = game.phase === 'setting' && game.settingPlayer === currentUserId;
+  const isAnswering = game.phase === 'answering';
+  const question = game.currentQuestion;
+
+  return (
+    <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="A quel point tu me connais ?">
+      <p className="text-[11px] text-muted-foreground mb-3">Manche {game.currentRound}/{game.maxRounds}</p>
+
+      {question && (
+        <div className="mb-4">
+          <p className="text-sm font-semibold mb-3">{question.text}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {question.options.map((opt: string, i: number) => (
+              <button key={i} onClick={() => {
+                if (isSetting) onMove({ gameId: game.id, move: 'set_answer', questionId: question.id, answerIndex: i });
+                else if (isAnswering) onMove({ gameId: game.id, move: 'answer', questionId: question.id, answerIndex: i });
+              }}
+                disabled={!isSetting && !isAnswering}
+                className="px-3 py-3 rounded-xl bg-white/5 border border-white/10 text-sm hover:bg-primary/20 hover:border-primary/40 transition-all disabled:opacity-50">
+                {opt}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isSetting && <p className="text-[11px] text-primary">Choisissez votre reponse (l'autre devinera)</p>}
+      {isAnswering && <p className="text-[11px] text-primary">Devinez la reponse de l'autre</p>}
+    </GenericGameWrapper>
+  );
+}
+
+// ══════════════════════════════════════
+// DEUX VERITES UN MENSONGE
+// ══════════════════════════════════════
+function DeuxVeritesGame({
+  game, currentUserId, players, onMove, onRematch, onClose,
+}: {
+  game: GameState; currentUserId: string; players: Record<string, GamePlayer>;
+  onMove: (data: any) => void; onRematch: () => void; onClose: () => void;
+}) {
+  const [statements, setStatements] = useState(["", "", ""]);
+  const [lieIndex, setLieIndex] = useState<number | null>(null);
+  const isWriter = game.currentPlayer === currentUserId;
+
+  return (
+    <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Deux Verites, Un Mensonge">
+      <p className="text-[11px] text-muted-foreground mb-3">Manche {game.currentRound}/{game.maxRounds}</p>
+
+      {game.phase === 'writing' && isWriter && (
+        <div>
+          <p className="text-[11px] text-primary mb-2">Ecrivez 3 affirmations (2 vraies, 1 fausse)</p>
+          {statements.map((s, i) => (
+            <input key={i} type="text" value={s} onChange={e => {
+              const newStatements = [...statements];
+              newStatements[i] = e.target.value;
+              setStatements(newStatements);
+            }}
+              placeholder={`Affirmation ${i + 1}...`}
+              className="w-full px-3 py-2 mb-2 rounded-xl bg-white/5 border border-white/10 text-sm focus:outline-none focus:border-primary"
+            />
+          ))}
+          <div className="flex gap-2 mb-3">
+            {[0, 1, 2].map(i => (
+              <button key={i} onClick={() => setLieIndex(i)}
+                className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${lieIndex === i ? 'bg-red-500 text-white' : 'bg-white/5 text-muted-foreground'}`}>
+                Mensonge {i + 1}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => {
+            if (statements.every(s => s.trim()) && lieIndex !== null) {
+              onMove({ gameId: game.id, move: 'statements', statements, lieIndex });
+              setStatements(["", "", ""]);
+              setLieIndex(null);
+            }
+          }} disabled={!statements.every(s => s.trim()) || lieIndex === null}
+            className="w-full py-2 rounded-xl bg-primary text-primary-foreground text-sm font-bold disabled:opacity-40">
+            Valider
+          </button>
+        </div>
+      )}
+
+      {game.phase === 'guessing' && !isWriter && (
+        <div>
+          <p className="text-[11px] text-primary mb-2">Lequel est le mensonge ?</p>
+          {game.currentStatements && game.currentStatements.map((s: string, i: number) => (
+            <button key={i} onClick={() => onMove({ gameId: game.id, move: 'guess', guessIndex: i })}
+              className="w-full px-4 py-3 mb-2 rounded-xl bg-white/5 border border-white/10 text-sm text-left hover:bg-primary/20">
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {game.phase === 'result' && game.lastResult && (
+        <div className={`p-3 rounded-xl ${game.lastResult.correct ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+          <p className="text-sm font-semibold mb-1">{game.lastResult.correct ? "Correct !" : "Faux !"}</p>
+          <p className="text-[11px] text-muted-foreground">Le mensonge etait: {game.lastResult.statements?.[game.lastResult.lieIndex]}</p>
+        </div>
+      )}
+    </GenericGameWrapper>
   );
 }
 

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,7 +14,7 @@ import * as LucideIcons from "lucide-react";
 const {
   MessageCircle, Send, QrCode, ArrowLeft, Check, CheckCheck, Search, X,
   Camera, Shield, Mic, Paperclip, FileText, Square, Phone, PhoneOff,
-  Play, Pause, Trash2, Pencil, Download, Video, Smile, Loader2, Gamepad2
+  Play, Pause, Trash2, Pencil, Download, Video, Smile, Loader2, Gamepad2, Users
 } = LucideIcons;
 const ImageIcon = LucideIcons.Image;
 
@@ -52,6 +52,7 @@ type Msg = {
 
 function ChatPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -695,6 +696,16 @@ function ChatPage() {
                       className="p-2.5 rounded-xl bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
                       title="Scanner un QR">
                       <Camera className="h-5 w-5" />
+                    </button>
+                    <button onClick={() => navigate({ to: "/past-contacts" })}
+                      className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+                      title="Contacts historiques">
+                      <Users className="h-5 w-5" />
+                    </button>
+                    <button onClick={() => navigate({ to: "/games" })}
+                      className="p-2.5 rounded-xl bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-colors"
+                      title="Jeux">
+                      <Gamepad2 className="h-5 w-5" />
                     </button>
                   </>
                 )}

@@ -379,6 +379,9 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ token }),
       }),
+
+    getPastContacts: () =>
+      request('/api/chat/past-contacts'),
   },
 
   reports: {
