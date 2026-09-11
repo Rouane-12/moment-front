@@ -14,7 +14,7 @@ import * as LucideIcons from "lucide-react";
 const {
   MessageCircle, Send, QrCode, ArrowLeft, Check, CheckCheck, Search, X,
   Camera, Shield, Mic, Paperclip, FileText, Square, Phone, PhoneOff,
-  Play, Pause, Trash2, Pencil, Download, Video, Smile, Loader2, Gamepad2, Users
+  Play, Pause, Trash2, Pencil, Download, Video, Smile, Loader2, Gamepad2, Users, MoreVertical
 } = LucideIcons;
 const ImageIcon = LucideIcons.Image;
 
@@ -81,6 +81,7 @@ function ChatPage() {
   const [inviteLink, setInviteLink] = useState("");
   const [showInviteInput, setShowInviteInput] = useState(false);
   const [inviteToken, setInviteToken] = useState("");
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -677,6 +678,17 @@ function ChatPage() {
                   </button>
                 ) : (
                   <>
+                    {/* Desktop: show all buttons */}
+                    <button onClick={handleGenerateInviteLink}
+                      className="hidden sm:block p-2.5 rounded-xl bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
+                      title="Lien d'invitation">
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    </button>
+                    <button onClick={() => setShowInviteInput(true)}
+                      className="hidden sm:block p-2.5 rounded-xl bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors"
+                      title="Rejoindre via lien">
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                    </button>
                     <button onClick={handleGenerateQR}
                       className="hidden sm:block p-2.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                       title="Mon QR code">
@@ -697,21 +709,51 @@ function ChatPage() {
                       title="Jeux">
                       <Gamepad2 className="h-5 w-5" />
                     </button>
-                    <button onClick={handleGenerateInviteLink}
-                      className="sm:hidden p-2.5 rounded-xl bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
-                      title="Lien d'invitation">
-                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                    </button>
-                    <button onClick={() => setShowInviteInput(true)}
-                      className="sm:hidden p-2.5 rounded-xl bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors"
-                      title="Rejoindre via lien">
-                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-                    </button>
-                    <button onClick={() => navigate({ to: "/games" })}
-                      className="sm:hidden p-2.5 rounded-xl bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-colors"
-                      title="Jeux">
-                      <Gamepad2 className="h-5 w-5" />
-                    </button>
+
+                    {/* Mobile: show more menu button */}
+                    <div className="relative sm:hidden">
+                      <button onClick={() => setShowMoreMenu(!showMoreMenu)}
+                        className="p-2.5 rounded-xl bg-white/10 text-white/80 hover:bg-white/20 transition-colors"
+                        title="Plus d'options">
+                        <MoreVertical className="h-5 w-5" />
+                      </button>
+
+                      {/* Mobile dropdown menu */}
+                      {showMoreMenu && (
+                        <div className="absolute right-0 top-full mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+                          <button onClick={() => { setShowMoreMenu(false); handleGenerateInviteLink(); }}
+                            className="w-full px-4 py-3 text-left hover:bg-white/10 transition-colors flex items-center gap-3">
+                            <svg className="h-4 w-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                            <span className="text-sm">Lien d'invitation</span>
+                          </button>
+                          <button onClick={() => { setShowMoreMenu(false); setShowInviteInput(true); }}
+                            className="w-full px-4 py-3 text-left hover:bg-white/10 transition-colors flex items-center gap-3">
+                            <svg className="h-4 w-4 text-orange-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                            <span className="text-sm">Rejoindre via lien</span>
+                          </button>
+                          <button onClick={() => { setShowMoreMenu(false); handleGenerateQR(); }}
+                            className="w-full px-4 py-3 text-left hover:bg-white/10 transition-colors flex items-center gap-3">
+                            <QrCode className="h-4 w-4 text-primary" />
+                            <span className="text-sm">Mon QR code</span>
+                          </button>
+                          <button onClick={() => { setShowMoreMenu(false); startScanner(); }}
+                            className="w-full px-4 py-3 text-left hover:bg-white/10 transition-colors flex items-center gap-3">
+                            <Camera className="h-4 w-4 text-green-400" />
+                            <span className="text-sm">Scanner un QR</span>
+                          </button>
+                          <button onClick={() => { setShowMoreMenu(false); navigate({ to: "/past-contacts" }); }}
+                            className="w-full px-4 py-3 text-left hover:bg-white/10 transition-colors flex items-center gap-3">
+                            <Users className="h-4 w-4 text-cyan-400" />
+                            <span className="text-sm">Contacts historiques</span>
+                          </button>
+                          <button onClick={() => { setShowMoreMenu(false); navigate({ to: "/games" }); }}
+                            className="w-full px-4 py-3 text-left hover:bg-white/10 transition-colors flex items-center gap-3">
+                            <Gamepad2 className="h-4 w-4 text-yellow-400" />
+                            <span className="text-sm">Jeux</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
               </div>
