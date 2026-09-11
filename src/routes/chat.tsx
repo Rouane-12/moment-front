@@ -75,6 +75,8 @@ function ChatPage() {
   const [showChatMenu, setShowChatMenu] = useState(false);
   const [convContextMenu, setConvContextMenu] = useState<{ convId: string; otherUserId: string; x: number; y: number } | null>(null);
   const [showGameMenu, setShowGameMenu] = useState(false);
+  // Invitation à un jeu multijoueur (page Jeux) reçue pendant qu'on est dans le chat
+  const [multiInvite, setMultiInvite] = useState<{ type: string; from: string } | null>(null);
   const [activeGame, setActiveGame] = useState<any>(null);
   const [gamePlayers, setGamePlayers] = useState<Record<string, any>>({});
   const [showInviteLink, setShowInviteLink] = useState(false);
@@ -143,17 +145,24 @@ function ChatPage() {
       return players;
     };
 
+    const MULTIPLAYER_GAMES = ["buzzer_quiz", "infiltrated", "mot_intrus_multi"];
     socket.on("game-invite", (data: { game: any; from: string }) => {
+      if (data.game && MULTIPLAYER_GAMES.includes(data.game.type)) {
+        setMultiInvite({ type: data.game.type, from: data.from });
+        return;
+      }
       setActiveGame(data.game);
       setGamePlayers(resolveGamePlayers(data.game));
     });
 
     socket.on("game-start", (data: { game: any }) => {
+      if (data.game && MULTIPLAYER_GAMES.includes(data.game.type)) return;
       setActiveGame(data.game);
       setGamePlayers(resolveGamePlayers(data.game));
     });
 
     socket.on("game-state", (data: { game: any }) => {
+      if (data.game && MULTIPLAYER_GAMES.includes(data.game.type)) return;
       setActiveGame(data.game);
       // Merge — don't overwrite existing good names
       setGamePlayers(prev => {
@@ -1280,6 +1289,26 @@ function ChatPage() {
               />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── BANNIÈRE INVITATION JEU MULTIJOUEUR ── */}
+      {multiInvite && !activeGame && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[260] bg-[#111] border border-primary/40 rounded-2xl px-4 py-3 shadow-2xl flex items-center gap-3 max-w-[92vw]">
+          <Gamepad2 className="h-5 w-5 text-primary shrink-0" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold truncate">
+              {multiInvite.type === "infiltrated" ? "L'Infiltré" : multiInvite.type === "buzzer_quiz" ? "Quiz Buzzer" : "Mot Intrus"} · invitation reçue
+            </p>
+            <p className="text-[10px] text-muted-foreground">Ouvre la page Jeux pour rejoindre la partie</p>
+          </div>
+          <button
+            onClick={() => { setMultiInvite(null); navigate({ to: "/games" }); }}
+            className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold shrink-0"
+          >
+            Rejoindre
+          </button>
+          <button onClick={() => setMultiInvite(null)} className="p-1.5 rounded-lg hover:bg-white/10 shrink-0">✕</button>
         </div>
       )}
 
