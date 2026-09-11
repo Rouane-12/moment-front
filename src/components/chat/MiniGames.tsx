@@ -69,6 +69,7 @@ export interface GameState {
   canGuess?: boolean;
   filledCount?: number;
   guessedCount?: number;
+  settingIndex?: number;
   // Deux Vérités, Un Mensonge (envoyé par le backend au rédacteur)
   currentStatements?: string[];
   correctCount?: Record<string, number>;
@@ -1266,6 +1267,15 @@ function DevineGame({
         </div>
       )}
 
+      {/* Affiche la question EN COURS pendant la phase answering */}
+      {isThinker && game.phase === 'answering' && game.currentQuestion && (
+        <div className="mb-4 p-3 rounded-xl bg-primary/10 border border-primary/30">
+          <p className="text-[11px] text-primary font-semibold mb-1">Question de votre ami :</p>
+          <p className="text-sm font-medium">{game.currentQuestion.text}</p>
+        </div>
+      )}
+
+      {/* Affiche la PRECEDENTE reponse pour l'historique */}
       {game.lastAnswer && (
         <div className="mb-4 p-3 rounded-xl bg-white/5">
           <p className="text-[11px] text-muted-foreground">{game.lastAnswer.question}</p>
@@ -1341,7 +1351,7 @@ function AQuelPointGame({
       {canSet && (
         <div>
           <p className="text-[11px] text-primary font-semibold mb-2">
-            Remplis tes verites ! ({filledCount}/{game.maxRounds} faites)
+            Remplis tes verites ! (Question {(game.settingIndex || 0) + 1}/{game.maxRounds})
           </p>
           <p className="text-[10px] text-muted-foreground mb-3">
             Reponds honnetement, l'autre devinera apres.
@@ -1432,16 +1442,20 @@ function DeuxVeritesGame({
   onMove: (data: any) => void; onRematch: () => void; onClose: () => void;
 }) {
   const [statements, setStatements] = useState(["", "", ""]);
-  const [lieIndex, setLieIndex] = useState<number | null>(null);
+  const [truthIndex, setTruthIndex] = useState<number | null>(null);
   const isWriter = game.currentPlayer === currentUserId;
+
+  // Les affirmations de l'autre joueur (pendant guessing)
+  const otherStatements = !isWriter && game.statements ? game.statements[game.currentPlayer] : null;
 
   return (
     <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Deux Verites, Un Mensonge">
       <p className="text-[11px] text-muted-foreground mb-3">Manche {game.currentRound}/{game.maxRounds}</p>
 
+      {/* ═══ ECRITURE (le joueur courant remplit) ═══ */}
       {game.phase === 'writing' && isWriter && (
         <div>
-          <p className="text-[11px] text-primary mb-2">Ecrivez 3 affirmations (2 vraies, 1 fausse)</p>
+          <p className="text-[11px] text-primary mb-2">Ecrivez 3 affirmations : <strong>1 verite</strong> et <strong>2 mensonges</strong></p>
           {statements.map((s, i) => (
             <input key={i} type="text" value={s} onChange={e => {
               const newStatements = [...statements];
@@ -1452,31 +1466,42 @@ function DeuxVeritesGame({
               className="w-full px-3 py-2 mb-2 rounded-xl bg-white/5 border border-white/10 text-sm focus:outline-none focus:border-primary"
             />
           ))}
+          <p className="text-[10px] text-muted-foreground mb-2">Quelle est la VERITE ? (les 2 autres sont des mensonges)</p>
           <div className="flex gap-2 mb-3">
             {[0, 1, 2].map(i => (
-              <button key={i} onClick={() => setLieIndex(i)}
-                className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${lieIndex === i ? 'bg-red-500 text-white' : 'bg-white/5 text-muted-foreground'}`}>
-                Mensonge {i + 1}
+              <button key={i} onClick={() => setTruthIndex(i)}
+                className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${truthIndex === i ? 'bg-green-500 text-white' : 'bg-white/5 text-muted-foreground'}`}>
+                Verite {i + 1}
               </button>
             ))}
           </div>
           <button onClick={() => {
-            if (statements.every(s => s.trim()) && lieIndex !== null) {
-              onMove({ gameId: game.id, move: 'statements', statements, lieIndex });
+            if (statements.every(s => s.trim()) && truthIndex !== null) {
+              onMove({ gameId: game.id, move: 'statements', statements, truthIndex });
               setStatements(["", "", ""]);
-              setLieIndex(null);
+              setTruthIndex(null);
             }
-          }} disabled={!statements.every(s => s.trim()) || lieIndex === null}
+          }} disabled={!statements.every(s => s.trim()) || truthIndex === null}
             className="w-full py-2 rounded-xl bg-primary text-primary-foreground text-sm font-bold disabled:opacity-40">
             Valider
           </button>
         </div>
       )}
 
-      {game.phase === 'guessing' && !isWriter && (
+      {/* ═══ EN ATTENTE (pendant que l'autre ecrit) ═══ */}
+      {game.phase === 'writing' && !isWriter && (
+        <div className="text-center py-6">
+          <p className="text-sm text-muted-foreground">
+            En attente que <PlayerName id={game.currentPlayer || ''} players={players} /> ecrit ses affirmations...
+          </p>
+        </div>
+      )}
+
+      {/* ═══ DEVINETTE (l'autre joueur choisit la verite) ═══ */}
+      {game.phase === 'guessing' && !isWriter && otherStatements && (
         <div>
-          <p className="text-[11px] text-primary mb-2">Lequel est le mensonge ?</p>
-          {game.currentStatements && game.currentStatements.map((s: string, i: number) => (
+          <p className="text-[11px] text-primary mb-2">Quelle est la <strong>VERITE</strong> ? (les 2 autres sont des mensonges)</p>
+          {otherStatements.map((s: string, i: number) => (
             <button key={i} onClick={() => onMove({ gameId: game.id, move: 'guess', guessIndex: i })}
               className="w-full px-4 py-3 mb-2 rounded-xl bg-white/5 border border-white/10 text-sm text-left hover:bg-primary/20">
               {s}
@@ -1485,10 +1510,31 @@ function DeuxVeritesGame({
         </div>
       )}
 
+      {/* ═══ EN ATTENTE (pendant que l'autre devine) ═══ */}
+      {game.phase === 'guessing' && isWriter && (
+        <div className="text-center py-6">
+          <p className="text-sm text-muted-foreground">
+            En attente que <PlayerName id={game.players.find(p => p !== currentUserId) || ''} players={players} /> devine...
+          </p>
+        </div>
+      )}
+
+      {/* ═══ RESULTAT ═══ */}
       {game.phase === 'result' && game.lastResult && (
-        <div className={`p-3 rounded-xl ${game.lastResult.correct ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
-          <p className="text-sm font-semibold mb-1">{game.lastResult.correct ? "Correct !" : "Faux !"}</p>
-          <p className="text-[11px] text-muted-foreground">Le mensonge etait: {game.lastResult.statements?.[game.lastResult.lieIndex]}</p>
+        <div>
+          <div className={`p-3 rounded-xl mb-3 ${game.lastResult.correct ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+            <p className="text-sm font-semibold mb-1">{game.lastResult.correct ? "Bonne reponse ! +100 pts" : "Mauvaise reponse..."}</p>
+            <p className="text-[11px] text-muted-foreground">La verite etait : {game.lastResult.statements?.[game.lastResult.truthIndex]}</p>
+          </div>
+          {game.lastResult.statements && (
+            <div className="space-y-1">
+              {game.lastResult.statements.map((s: string, i: number) => (
+                <div key={i} className={`px-3 py-2 rounded-lg text-xs ${i === game.lastResult.truthIndex ? 'bg-green-500/20 border border-green-500/30' : 'bg-red-500/10 border border-red-500/20'}`}>
+                  {i === game.lastResult.truthIndex ? '✅ Verite' : '❌ Mensonge'} : {s}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </GenericGameWrapper>
