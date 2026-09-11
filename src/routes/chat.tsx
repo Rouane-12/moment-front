@@ -151,12 +151,23 @@ function ChatPage() {
         setMultiInvite({ type: data.game.type, from: data.from });
         return;
       }
-      setActiveGame(data.game);
+      // FIX: Only overwrite activeGame if it's null or still in 'waiting' state.
+      // If game-start already arrived (race condition), don't overwrite the playing game
+      // back to waiting — that would make the inviter never see the game interface.
+      console.log("🎮 game-invite received:", data.game?.type, "from:", data.from, "prev state:", "...");
+      setActiveGame((prev: any) => {
+        if (prev && prev.state !== "waiting") {
+          console.log("🎮 game-invite IGNORED (prev state:", prev.state, ")");
+          return prev;
+        }
+        return data.game;
+      });
       setGamePlayers(resolveGamePlayers(data.game));
     });
 
     socket.on("game-start", (data: { game: any }) => {
       if (data.game && MULTIPLAYER_GAMES.includes(data.game.type)) return;
+      console.log("🎮 game-start received:", data.game?.type, data.game?.state);
       setActiveGame(data.game);
       setGamePlayers(resolveGamePlayers(data.game));
     });
