@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { io, Socket } from "socket.io-client";
 import * as LucideIcons from "lucide-react";
 
-const { ArrowLeft, Users, Play, Zap, Trophy, Clock, Check, X, Loader2, Gamepad2 } = LucideIcons;
+const { ArrowLeft, Users, Play, Zap, Trophy, Clock, Check, X, Loader2, Gamepad2, Skull, Dice, Brain, Target, Search, Mask, Info } = LucideIcons;
 
 export const Route = createFileRoute("/games")({ ssr: false, component: GamesPage });
 
@@ -38,6 +38,37 @@ type BuzzerGame = {
   createdBy: string;
 };
 
+type InfiltratedGame = {
+  id: string;
+  type: "infiltrated";
+  players: string[];
+  createdBy: string;
+  state: "waiting" | "night" | "day" | "voting" | "finished";
+  phase: "lobby" | "night_action" | "night_result" | "day_discussion" | "day_vote" | "vote_result";
+  day: number;
+  playerRoles: Record<string, string>;
+  alive: Record<string, boolean>;
+  eliminated: Array<{ player: string; day: number; reason: string }>;
+  nightActions: Record<string, any>;
+  votes: Record<string, string>;
+  clues: Array<{ day: number; text: string }>;
+  discussionTime: number;
+  voteTime: number;
+  phaseStartTime: number | null;
+  winner: string | null;
+  winReason: string | null;
+};
+
+type GameMode = {
+  id: string;
+  name: string;
+  icon: any;
+  description: string;
+  minPlayers: number;
+  maxPlayers: number;
+  category: string;
+};
+
 function GamesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -47,9 +78,12 @@ function GamesPage() {
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
-  const [game, setGame] = useState<BuzzerGame | null>(null);
+  const [game, setGame] = useState<BuzzerGame | InfiltratedGame | null>(null);
   const [buzzing, setBuzzing] = useState(false);
   const [showResult, setShowResult] = useState(false);
+  const [selectedGameMode, setSelectedGameMode] = useState<string>("infiltrated");
+  const [showGameExplanation, setShowGameExplanation] = useState(false);
+  const [myRole, setMyRole] = useState<{ role: string; roleName: string; emoji: string; objective: string; team: string } | null>(null);
 
   // Connect socket
   useEffect(() => {
@@ -68,12 +102,16 @@ function GamesPage() {
       setGame(data.game);
     });
 
-    socket.on("game-state", (data: { game: BuzzerGame }) => {
+    socket.on("game-state", (data: { game: BuzzerGame | InfiltratedGame }) => {
       setGame(data.game);
-      if (data.game.lastQuestionResult) {
+      if (data.game.type === "buzzer_quiz" && data.game.lastQuestionResult) {
         setShowResult(true);
         setTimeout(() => setShowResult(false), 2000);
       }
+    });
+
+    socket.on("infiltrated-role", (data: { role: string; roleName: string; emoji: string; objective: string; team: string }) => {
+      setMyRole(data);
     });
 
     socket.on("presence-update", (data: { userId: string; online: boolean }) => {
@@ -111,18 +149,26 @@ function GamesPage() {
   };
 
   const togglePlayer = (userId: string) => {
+    if (!selectedMode) return;
     setSelectedPlayers((prev) => {
       if (prev.includes(userId)) {
         return prev.filter((id) => id !== userId);
       }
-      if (prev.length >= 4) return prev; // max 4 additional players (5 total with creator)
+      if (prev.length >= selectedMode.maxPlayers - 1) return prev; // max players with creator
       return [...prev, userId];
     });
   };
 
   const createGame = () => {
-    if (!socketRef.current || selectedPlayers.length < 2) return;
-    socketRef.current.emit("buzzer-create", {});
+    if (!socketRef.current || !selectedMode) return;
+    if (selectedPlayers.length + 1 < selectedMode.minPlayers) return;
+
+    if (selectedGameMode === "infiltrated") {
+      socketRef.current.emit("infiltrated-create", { players: selectedPlayers });
+    } else if (selectedGameMode === "buzzer_quiz") {
+      socketRef.current.emit("buzzer-create", {});
+    }
+    // Other games would be handled similarly
   };
 
   const addPlayerToGame = (playerId: string) => {
@@ -179,8 +225,360 @@ function GamesPage() {
     }
   };
 
+  const gameModes: GameMode[] = [
+    {
+      id: "infiltrated",
+      name: "🕵️ L'Infiltré",
+      icon: Skull,
+      description: "4-12 joueurs · Un jeu social de déduction et bluff",
+      minPlayers: 4,
+      maxPlayers: 12,
+      category: "Social"
+    },
+    {
+      id: "buzzer_quiz",
+      name: "🎯 Quiz Buzzer",
+      icon: Zap,
+      description: "3-5 joueurs · Le plus rapide répond aux questions",
+      minPlayers: 3,
+      maxPlayers: 5,
+      category: "Culture"
+    },
+    {
+      id: "trivia",
+      name: "🧠 Quiz Culture",
+      icon: Brain,
+      description: "2-5 joueurs · 20 questions de culture générale",
+      minPlayers: 2,
+      maxPlayers: 5,
+      category: "Culture"
+    },
+    {
+      id: "dice_duel",
+      name: "🎲 Duel de Dés",
+      icon: Dice,
+      description: "2-4 joueurs · Meilleur score en 3 manches",
+      minPlayers: 2,
+      maxPlayers: 4,
+      category: "Hasard"
+    },
+    {
+      id: "reflex",
+      name: "⚡ Le Reflexe",
+      icon: Target,
+      description: "2-4 joueurs · Le plus rapide gagne",
+      minPlayers: 2,
+      maxPlayers: 4,
+      category: "Reflexes"
+    },
+    {
+      id: "mot_intrus",
+      name: "🔍 Le Mot Intrus",
+      icon: Search,
+      description: "2-5 joueurs · Trouvez le mot différent",
+      minPlayers: 2,
+      maxPlayers: 5,
+      category: "Logique"
+    },
+    {
+      id: "deux_verites",
+      name: "🎭 Deux Vérités, Un Mensonge",
+      icon: Mask,
+      description: "3-6 joueurs · Trouvez le mensonge",
+      minPlayers: 3,
+      maxPlayers: 6,
+      category: "Bluff"
+    }
+  ];
+
+  const selectedMode = gameModes.find(m => m.id === selectedGameMode);
+
+  const getGameExplanation = (gameId: string) => {
+    const explanations: Record<string, { title: string; rules: string[]; tips: string[] }> = {
+      infiltrated: {
+        title: "🕵️ L'Infiltré",
+        rules: [
+          "4 à 12 joueurs · Un jeu social de déduction et bluff",
+          "Chaque joueur reçoit secrètement un rôle : Citoyen, Infiltré, Détective, Garde ou Imposteur",
+          "La nuit : L'Infiltré élimine, le Détective enquête, le Garde protège",
+          "Le jour : Discutez et votez pour éliminer un suspect",
+          "Des indices publics sont révélés à chaque tour",
+          "L'équipe qui accomplit son objectif gagne"
+        ],
+        tips: [
+          "Observez bien les indices et les comportements",
+          "Bluffez intelligemment si vous êtes l'Infiltré",
+          "Protégez les bons joueurs si vous êtes le Garde"
+        ]
+      },
+      buzzer_quiz: {
+        title: "🎯 Quiz Buzzer",
+        rules: [
+          "3 à 5 joueurs · Le plus rapide répond aux questions",
+          "Appuyez sur le buzzer dès que vous connaissez la réponse",
+          "Le premier à buzzer a le droit de répondre",
+          "Bonne réponse = points, mauvaise réponse = pénalité",
+          "20 questions de culture générale en français"
+        ],
+        tips: [
+          "Soyez rapide mais précis",
+          "Lisez toutes les réponses avant de buzzer"
+        ]
+      },
+      trivia: {
+        title: "🧠 Quiz Culture",
+        rules: [
+          "2 à 5 joueurs · 20 questions de culture générale",
+          "Chaque joueur répond à toutes les questions",
+          "Points selon la difficulté de la question",
+          "Le joueur avec le plus de points gagne"
+        ],
+        tips: [
+          "Prenez votre temps pour bien réfléchir",
+          "Les questions sont en français"
+        ]
+      },
+      dice_duel: {
+        title: "🎲 Duel de Dés",
+        rules: [
+          "2 à 4 joueurs · Meilleur score en 3 manches",
+          "Lancez les dés et essayez d'obtenir le meilleur score",
+          "Le joueur avec le plus de points après 3 manches gagne"
+        ],
+        tips: [
+          "Le hasard fait partie du jeu, amusez-vous !"
+        ]
+      },
+      reflex: {
+        title: "⚡ Le Reflexe",
+        rules: [
+          "2 à 4 joueurs · Le plus rapide gagne",
+          "Appuyez dès que le signal apparaît",
+          "Le plus rapide marque le point"
+        ],
+        tips: [
+          "Concentrez-vous sur l'écran",
+          "Ne réagissez pas aux fausses alertes"
+        ]
+      },
+      mot_intrus: {
+        title: "🔍 Le Mot Intrus",
+        rules: [
+          "2 à 5 joueurs · Trouvez le mot différent",
+          "4 mots sont présentés, 1 est l'intrus",
+          "Le premier à trouver l'intrus marque le point"
+        ],
+        tips: [
+          "Cherchez les catégories sémantiques",
+          "Attention aux pièges !"
+        ]
+      },
+      deux_verites: {
+        title: "🎭 Deux Vérités, Un Mensonge",
+        rules: [
+          "3 à 6 joueurs · Trouvez le mensonge",
+          "Un joueur dit 3 affirmations : 2 vraies, 1 fausse",
+          "Les autres votent pour trouver le mensonge",
+          "Si le mensonge est trouvé, les votants marquent"
+        ],
+        tips: [
+          "Soyez crédible dans vos mensonges",
+          "Observez les hésitations des autres joueurs"
+        ]
+      }
+    };
+    return explanations[gameId] || { title: "Jeu", rules: [], tips: [] };
+  };
+
   // ===== GAME IN PROGRESS =====
   if (game) {
+    // Infiltrated Game UI
+    if (game.type === "infiltrated") {
+      const infGame = game as InfiltratedGame;
+
+      return (
+        <ProtectedRoute>
+          <div className="grain flex-1 min-h-0 flex flex-col overflow-hidden bg-background">
+            {/* Header */}
+            <div className="shrink-0 bg-background/80 backdrop-blur-xl border-b border-white/10 px-4 py-3 flex items-center gap-3">
+              <button onClick={() => { setGame(null); setMyRole(null); socketRef.current?.emit("game-close", { gameId: game.id }); }}
+                className="p-2 rounded-xl hover:bg-white/10 transition-colors">
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <div className="flex-1">
+                <h1 className="font-bold text-sm">🕵️ L'Infiltré</h1>
+                <p className="text-[10px] text-muted-foreground">
+                  {infGame.state === "waiting" ? "En attente des joueurs..." :
+                   infGame.state === "night" ? `🌙 Nuit ${infGame.day}` :
+                   infGame.state === "day" ? `☀️ Jour ${infGame.day}` :
+                   infGame.state === "voting" ? "🗳️ Vote en cours" :
+                   "Partie terminée"}
+                </p>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {infGame.players.filter(p => infGame.alive[p]).length}/{infGame.players.length} en vie
+              </div>
+            </div>
+
+            {/* Role Reveal (only shown once at start) */}
+            {myRole && infGame.state === "night" && infGame.phase === "night_action" && (
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <div className="max-w-md mx-auto">
+                  <div className="bg-primary/20 border border-primary/40 rounded-2xl p-6 text-center mb-4">
+                    <div className="text-6xl mb-3">{myRole.emoji}</div>
+                    <h2 className="text-xl font-bold mb-2">{myRole.roleName}</h2>
+                    <p className="text-sm text-muted-foreground mb-4">{myRole.objective}</p>
+                    <div className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                      myRole.team === "village" ? "bg-green-500/20 text-green-400" :
+                      myRole.team === "infiltrated" ? "bg-red-500/20 text-red-400" :
+                      "bg-yellow-500/20 text-yellow-400"
+                    }`}>
+                      Équipe: {myRole.team === "village" ? "Village" : myRole.team === "infiltrated" ? "Infiltrés" : "Neutre"}
+                    </div>
+                  </div>
+
+                  {/* Night Actions */}
+                  {myRole.role === "infiltrated" && (
+                    <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                      <h3 className="text-sm font-semibold mb-3">Choisis ta cible</h3>
+                      <div className="space-y-2">
+                        {infGame.players.filter(p => infGame.alive[p] && p !== user?.id).map(pId => (
+                          <button
+                            key={pId}
+                            onClick={() => socketRef.current?.emit("game-move", { gameId: infGame.id, move: "night_eliminate", targetId: pId })}
+                            className="w-full p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-red-500/20 hover:border-red-500/40 transition-colors text-left"
+                          >
+                            <span className="text-sm">{pId === user?.id ? "Vous" : pId.substring(0, 8)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {myRole.role === "detective" && (
+                    <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                      <h3 className="text-sm font-semibold mb-3">Enquête sur un joueur</h3>
+                      <div className="space-y-2">
+                        {infGame.players.filter(p => infGame.alive[p] && p !== user?.id).map(pId => (
+                          <button
+                            key={pId}
+                            onClick={() => socketRef.current?.emit("game-move", { gameId: infGame.id, move: "night_investigate", targetId: pId })}
+                            className="w-full p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-blue-500/20 hover:border-blue-500/40 transition-colors text-left"
+                          >
+                            <span className="text-sm">{pId === user?.id ? "Vous" : pId.substring(0, 8)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {myRole.role === "guard" && (
+                    <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                      <h3 className="text-sm font-semibold mb-3">Protège un joueur</h3>
+                      <div className="space-y-2">
+                        {infGame.players.filter(p => infGame.alive[p]).map(pId => (
+                          <button
+                            key={pId}
+                            onClick={() => socketRef.current?.emit("game-move", { gameId: infGame.id, move: "night_protect", targetId: pId })}
+                            className="w-full p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-green-500/20 hover:border-green-500/40 transition-colors text-left"
+                          >
+                            <span className="text-sm">{pId === user?.id ? "Vous (auto-protection)" : pId.substring(0, 8)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {myRole.role === "citizen" && (
+                    <div className="bg-white/5 rounded-xl p-4 border border-white/10 text-center">
+                      <p className="text-sm text-muted-foreground">Attends la phase de jour pour discuter et voter.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Day Phase */}
+            {infGame.state === "day" && (
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <div className="max-w-md mx-auto">
+                  {/* Latest Clue */}
+                  {infGame.clues.length > 0 && (
+                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-4">
+                      <h3 className="text-xs font-semibold text-yellow-400 mb-2">🔎 INDICE</h3>
+                      <p className="text-sm">{infGame.clues[infGame.clues.length - 1].text}</p>
+                    </div>
+                  )}
+
+                  {/* Discussion Phase */}
+                  {infGame.phase === "day_discussion" && (
+                    <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                      <h3 className="text-sm font-semibold mb-2">☀️ Discussion</h3>
+                      <p className="text-xs text-muted-foreground mb-3">Discutez avec les autres joueurs pour trouver les Infiltrés.</p>
+                      <div className="text-center py-4">
+                        <Clock className="h-8 w-8 mx-auto mb-2 text-yellow-400 animate-spin" />
+                        <p className="text-sm text-muted-foreground">Vote dans quelques instants...</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Voting Phase */}
+                  {infGame.phase === "day_vote" && (
+                    <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                      <h3 className="text-sm font-semibold mb-3">🗳️ Vote pour éliminer</h3>
+                      <div className="space-y-2">
+                        {infGame.players.filter(p => infGame.alive[p] && p !== user?.id).map(pId => (
+                          <button
+                            key={pId}
+                            onClick={() => socketRef.current?.emit("game-move", { gameId: infGame.id, move: "vote", targetId: pId })}
+                            className="w-full p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-red-500/20 hover:border-red-500/40 transition-colors text-left"
+                          >
+                            <span className="text-sm">{pId.substring(0, 8)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Vote Result */}
+                  {infGame.phase === "vote_result" && (
+                    <div className="bg-white/5 rounded-xl p-4 border border-white/10 text-center">
+                      <p className="text-sm text-muted-foreground">Résultat du vote...</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Finished State */}
+            {infGame.state === "finished" && (
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <div className="max-w-md mx-auto text-center">
+                  <Trophy className="h-16 w-16 mx-auto mb-4 text-yellow-400" />
+                  <h2 className="text-2xl font-bold mb-2">
+                    {infGame.winner === "village" ? "Victoire du Village !" :
+                     infGame.winner === "infiltrated" ? "Victoire des Infiltrés !" :
+                     infGame.winner === "impostor" ? "Victoire de l'Imposteur !" :
+                     "Partie terminée"}
+                  </h2>
+                  <p className="text-sm text-muted-foreground mb-6">{infGame.winReason}</p>
+                  <div className="space-y-2 mb-6">
+                    {infGame.eliminated.map((e, i) => (
+                      <div key={i} className="bg-white/5 rounded-lg p-3 text-left">
+                        <p className="text-xs text-muted-foreground">Jour {e.day} - {e.reason}</p>
+                        <p className="text-sm">{e.player.substring(0, 8)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </ProtectedRoute>
+      );
+    }
+
+    // Buzzer Quiz UI (existing)
     return (
       <ProtectedRoute>
         <div className="grain flex-1 min-h-0 flex flex-col overflow-hidden bg-background">
@@ -376,25 +774,53 @@ function GamesPage() {
 
           {/* Game Mode Selection */}
           <div className="mb-6">
-            <h2 className="text-sm font-semibold mb-3">Mode de jeu</h2>
-            <div className="bg-primary/10 border border-primary/30 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
-                  <Zap className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">🎯 Quiz Buzzer</p>
-                  <p className="text-xs text-muted-foreground">3-5 joueurs · Le plus rapide répond</p>
-                </div>
-              </div>
+            <h2 className="text-sm font-semibold mb-3">Choisissez un jeu</h2>
+            <div className="space-y-2">
+              {gameModes.map((mode) => {
+                const IconComp = mode.icon;
+                const isSelected = selectedGameMode === mode.id;
+                return (
+                  <button
+                    key={mode.id}
+                    onClick={() => setSelectedGameMode(mode.id)}
+                    className={`w-full p-4 rounded-xl border transition-all text-left ${
+                      isSelected
+                        ? "bg-primary/20 border-primary/40"
+                        : "bg-white/5 border-white/10 hover:bg-white/10"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                        isSelected ? "bg-primary/30" : "bg-white/10"
+                      }`}>
+                        <IconComp className={`h-6 w-6 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-sm">{mode.name}</p>
+                        <p className="text-xs text-muted-foreground">{mode.description}</p>
+                      </div>
+                      {isSelected && (
+                        <Check className="h-5 w-5 text-primary flex-shrink-0" />
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
+            {selectedMode && (
+              <button onClick={() => setShowGameExplanation(true)}
+                className="mt-3 w-full py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                <Info className="h-4 w-4" />
+                Comment ça marche ?
+              </button>
+            )}
           </div>
 
           {/* Selected Players */}
-          {selectedPlayers.length > 0 && (
+          {selectedPlayers.length > 0 && selectedMode && (
             <div className="mb-6">
               <h2 className="text-sm font-semibold mb-3">
-                Joueurs sélectionnés ({selectedPlayers.length + 1}/5)
+                Joueurs sélectionnés ({selectedPlayers.length + 1}/{selectedMode.maxPlayers})
               </h2>
               <div className="flex flex-wrap gap-2">
                 {/* Creator (you) */}
@@ -429,6 +855,11 @@ function GamesPage() {
                   );
                 })}
               </div>
+              <p className="text-[10px] text-muted-foreground mt-2">
+                {selectedPlayers.length + 1 < selectedMode.minPlayers
+                  ? `Il faut au moins ${selectedMode.minPlayers} joueurs pour commencer`
+                  : "Vous pouvez commencer !"}
+              </p>
             </div>
           )}
 
@@ -506,9 +937,9 @@ function GamesPage() {
           )}
 
           {/* Create Game Button */}
-          {selectedPlayers.length >= 2 && (
+          {selectedMode && selectedPlayers.length + 1 >= selectedMode.minPlayers && (
             <div className="sticky bottom-0 py-4 bg-background/80 backdrop-blur-xl">
-              <button onClick={createGame}
+              <button onClick={() => setShowGameExplanation(true)}
                 className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors">
                 <Gamepad2 className="h-5 w-5 inline mr-2" />
                 Créer la partie ({selectedPlayers.length + 1} joueurs)
@@ -517,6 +948,57 @@ function GamesPage() {
           )}
         </div>
       </div>
+
+      {/* Game Explanation Modal */}
+      {showGameExplanation && selectedMode && (() => {
+        const explanation = getGameExplanation(selectedMode.id);
+        return (
+          <div className="fixed inset-0 z-[300] bg-black/70 flex items-center justify-center p-4" onClick={() => setShowGameExplanation(false)}>
+            <div className="bg-[#111] border border-white/10 rounded-2xl max-w-md w-full max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                <h2 className="font-bold text-sm">{explanation.title}</h2>
+                <button onClick={() => setShowGameExplanation(false)} className="p-1 rounded-lg hover:bg-white/10">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto max-h-[calc(80vh-60px)]">
+                <div className="mb-4">
+                  <h3 className="text-xs font-semibold text-primary mb-2">Règles du jeu</h3>
+                  <ul className="space-y-1">
+                    {explanation.rules.map((rule, i) => (
+                      <li key={i} className="text-xs text-muted-foreground flex items-start gap-2">
+                        <span className="text-primary mt-0.5">•</span>
+                        <span>{rule}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-xs font-semibold text-primary mb-2">Conseils</h3>
+                  <ul className="space-y-1">
+                    {explanation.tips.map((tip, i) => (
+                      <li key={i} className="text-xs text-muted-foreground flex items-start gap-2">
+                        <span className="text-yellow-400 mt-0.5">💡</span>
+                        <span>{tip}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <div className="px-4 py-3 border-t border-white/10">
+                <button onClick={() => {
+                  setShowGameExplanation(false);
+                  createGame();
+                }}
+                  className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors">
+                  <Play className="h-5 w-5 inline mr-2" />
+                  Commencer
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </ProtectedRoute>
   );
 }
