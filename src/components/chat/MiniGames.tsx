@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 const DICE_FACES = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 const RPS_EMOJI: Record<string, string> = { rock: "✊", paper: "✋", scissors: "✌️" };
 
-export type GameType = "reflex" | "tictactoe" | "rps" | "dice" | "quiz" | "code_secret" | "mot_intrus" | "devine_ce_que_je_pense" | "a_quel_point" | "deux_verites";
+export type GameType = "reflex" | "tictactoe" | "rps" | "dice" | "quiz" | "code_secret" | "mot_intrus" | "devine_ce_que_je_pense" | "a_quel_point" | "deux_verites" | "memoire_flash" | "action_verite";
 
 export interface QuizQuestion {
   id: string;
@@ -51,7 +51,21 @@ export interface GameState {
   progress?: number;
   pstate?: "idle" | "question" | "feedback" | "done";
   deadline?: number | null;
-  lastResult?: QuizLastResult | null;
+  lastResult?: any;
+  // Mémoire Flash
+  level?: { len: number; points: number; label: string } | null;
+  sequence?: string[];
+  input?: string[];
+  // Action ou Vérité
+  avStatus?: "generating" | "ready";
+  isMyTurn?: boolean;
+  currentCard?: { kind: "verite" | "action"; text: string } | null;
+  verdict?: { by: string; accepted: boolean } | null;
+  skipsLeft?: number;
+  canJudge?: boolean;
+  canSkip?: boolean;
+  // Deux Vérités, Un Mensonge (envoyé par le backend au rédacteur)
+  currentStatements?: string[];
   correctCount?: Record<string, number>;
   opponent?: { progress: number };
 }
@@ -84,6 +98,8 @@ const iconMap: Record<string, any> = {
   Dice1: LucideIcons.Dice1,
   Grid3X3: LucideIcons.Grid3X3,
   Target: LucideIcons.Target,
+  MemoryStick: LucideIcons.MemoryStick,
+  Drama: LucideIcons.Drama,
 };
 
 export function GameMenu({ onSelect, onClose }: { onSelect: (type: GameType) => void; onClose: () => void }) {
@@ -97,10 +113,12 @@ export function GameMenu({ onSelect, onClose }: { onSelect: (type: GameType) => 
     { type: "quiz", icon: "Brain", name: "Quiz Culture", desc: "20 questions de culture generale", category: "Culture" },
     { type: "code_secret", icon: "Lock", name: "Le Code Secret", desc: "Devinez le code en 4 symboles", category: "Logique" },
     { type: "mot_intrus", icon: "Search", name: "Le Mot Intrus", desc: "Trouvez le mot different", category: "Logique" },
+    { type: "memoire_flash", icon: "MemoryStick", name: "Memoire Flash", desc: "Reproduisez la sequence de couleurs", category: "Reflexes" },
     // Jeux sociaux
     { type: "devine_ce_que_je_pense", icon: "Lightbulb", name: "Devine ce que je pense", desc: "Questions Oui/Non pour deviner", category: "Social" },
     { type: "a_quel_point", icon: "Heart", name: "A quel point tu me connais ?", desc: "Test de compatibilite", category: "Social" },
     { type: "deux_verites", icon: "Mask", name: "Deux Verites, Un Mensonge", desc: "Trouvez le mensonge", category: "Bluff" },
+    { type: "action_verite", icon: "Drama", name: "Action ou Verite", desc: "Cartes generees par l'IA", category: "Social" },
   ];
 
   const categories = [...new Set(games.map(g => g.category))];
@@ -155,6 +173,8 @@ const GAME_NAMES: Record<GameType, string> = {
   devine_ce_que_je_pense: "Devine ce que je pense",
   a_quel_point: "A quel point tu me connais ?",
   deux_verites: "Deux Verites, Un Mensonge",
+  memoire_flash: "Memoire Flash",
+  action_verite: "Action ou Verite",
 };
 
 export function GameInviteCard({
@@ -1240,6 +1260,182 @@ function DeuxVeritesGame({
 }
 
 // ══════════════════════════════════════
+// MÉMOIRE FLASH GAME
+// ══════════════════════════════════════
+
+const MF_COLORS: Record<string, string> = {
+  red: "bg-red-500",
+  blue: "bg-blue-500",
+  green: "bg-green-500",
+  yellow: "bg-yellow-400",
+  purple: "bg-purple-500",
+  orange: "bg-orange-500",
+};
+
+function MemoireFlashGame({
+  game, currentUserId, players, onMove, onRematch, onClose,
+}: {
+  game: GameState; currentUserId: string; players: Record<string, GamePlayer>;
+  onMove: (data: any) => void; onRematch: () => void; onClose: () => void;
+}) {
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const phase = game.phase ?? "idle";
+  const sequence = game.sequence ?? [];
+  const input = game.input ?? [];
+  const result = game.lastResult;
+
+  // Compte à rebours local basé sur deadline serveur
+  useEffect(() => {
+    if (!game.deadline) { setSecondsLeft(null); return; }
+    const tick = () => setSecondsLeft(Math.max(0, Math.ceil((game.deadline! - Date.now()) / 1000)));
+    tick();
+    const t = setInterval(tick, 250);
+    return () => clearInterval(t);
+  }, [game.deadline]);
+
+  const send = (move: string, extra: Record<string, unknown> = {}) =>
+    onMove({ gameId: game.id, move, ...extra });
+
+  return (
+    <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Mémoire Flash">
+      <p className="text-[11px] text-muted-foreground mb-2">
+        Manche {game.currentRound}/{game.maxRounds}
+        {game.level ? <> · {game.level.label} · {game.level.len} couleurs · +{game.level.points} pts</> : null}
+      </p>
+
+      {phase === "show" && (
+        <div className="mb-2">
+          <p className="text-xs font-semibold text-primary mb-2">Mémorise la séquence…</p>
+          <div className="flex justify-center gap-1.5 flex-wrap mb-2">
+            {sequence.map((c, i) => (
+              <span key={i} className={`w-9 h-9 rounded-lg ${MF_COLORS[c] ?? "bg-white/20"}`} />
+            ))}
+          </div>
+          {secondsLeft !== null && <p className="text-[10px] text-muted-foreground">Affichage : {secondsLeft}s</p>}
+        </div>
+      )}
+
+      {phase === "reproduce" && (
+        <div>
+          <div className="flex justify-center gap-1.5 mb-3 min-h-[36px]">
+            {Array.from({ length: (game.level?.len ?? 0) }).map((_, i) => (
+              <span key={i} className={`w-9 h-9 rounded-lg ${input[i] ? MF_COLORS[input[i]] : "bg-white/10"}`} />
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {Object.keys(MF_COLORS).map((c) => (
+              <button key={c} onClick={() => send("input", { color: c })}
+                className={`h-11 rounded-xl ${MF_COLORS[c]} active:scale-95 transition-transform`} />
+            ))}
+          </div>
+          <div className="flex justify-center gap-2">
+            <button onClick={() => send("undo")} disabled={input.length === 0}
+              className="px-4 py-2 rounded-lg bg-white/10 text-sm disabled:opacity-40">
+              Effacer
+            </button>
+          </div>
+          {secondsLeft !== null && <p className="text-[10px] text-muted-foreground mt-2">⏱ {secondsLeft}s</p>}
+        </div>
+      )}
+
+      {phase === "feedback" && result && (
+        <div className={`p-3 rounded-xl ${result.correct ? "bg-green-500/10 border border-green-500/30" : "bg-red-500/10 border border-red-500/30"}`}>
+          <p className="text-sm font-semibold mb-1">
+            {result.correct ? `Parfait ! +${result.points} pts` : result.timedOut ? "Temps écoulé !" : "Raté !"}
+          </p>
+          <p className="text-[11px] text-muted-foreground mb-2">La séquence était :</p>
+          <div className="flex justify-center gap-1.5">
+            {(result.expected ?? []).map((c: string, i: number) => (
+              <span key={i} className={`w-7 h-7 rounded ${MF_COLORS[c] ?? "bg-white/20"}`} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {phase === "idle" && <p className="text-[11px] text-muted-foreground">La partie va commencer…</p>}
+      <p className="text-[10px] text-muted-foreground mt-2">Adversaire : manche {game.opponent?.progress ?? 0}/{game.maxRounds}</p>
+    </GenericGameWrapper>
+  );
+}
+
+// ══════════════════════════════════════
+// ACTION OU VÉRITÉ GAME
+// ══════════════════════════════════════
+
+function ActionVeriteGame({
+  game, currentUserId, players, onMove, onRematch, onClose,
+}: {
+  game: GameState; currentUserId: string; players: Record<string, GamePlayer>;
+  onMove: (data: any) => void; onRematch: () => void; onClose: () => void;
+}) {
+  const card = game.currentCard;
+  const lastResult = game.lastResult;
+  const send = (move: string, extra: Record<string, unknown> = {}) =>
+    onMove({ gameId: game.id, move, ...extra });
+
+  if (game.avStatus === "generating") {
+    return (
+      <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Action ou Vérité">
+        <div className="py-8 text-center">
+          <LucideIcons.Loader2 className="h-6 w-6 animate-spin mx-auto mb-3 text-primary" />
+          <p className="text-sm">Génération des cartes par l'IA…</p>
+          <p className="text-[10px] text-muted-foreground mt-1">Quelques secondes</p>
+        </div>
+      </GenericGameWrapper>
+    );
+  }
+
+  return (
+    <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Action ou Vérité">
+      <p className="text-[11px] text-muted-foreground mb-2">Carte {game.currentRound}/{game.maxRounds}</p>
+
+      {card && !game.verdict && (
+        <div className="mb-3">
+          <div className={`p-4 rounded-xl border mb-3 ${card.kind === "action" ? "bg-orange-500/10 border-orange-500/30" : "bg-blue-500/10 border-blue-500/30"}`}>
+            <p className="text-[10px] font-bold uppercase tracking-wide mb-1 flex items-center gap-1 justify-center">
+              {card.kind === "action" ? <LucideIcons.Zap className="h-3 w-3" /> : <LucideIcons.MessageCircle className="h-3 w-3" />}
+              {card.kind === "action" ? "Action" : "Vérité"}
+            </p>
+            <p className="text-sm font-medium">{card.text}</p>
+          </div>
+          {game.isMyTurn ? (
+            <p className="text-[11px] text-primary">À toi de jouer ! L'autre validera ta carte.</p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-[11px] text-muted-foreground text-center">Tu es le juge de ce tour</p>
+              <div className="flex gap-2 justify-center">
+                <button onClick={() => send("verdict", { accepted: true })}
+                  className="px-4 py-2 rounded-xl bg-green-500 text-white text-sm font-bold">Réussie</button>
+                <button onClick={() => send("verdict", { accepted: false })}
+                  className="px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-bold">Refusée</button>
+              </div>
+              {game.canSkip && (
+                <div className="text-center">
+                  <button onClick={() => send("skip")} className="text-[11px] text-muted-foreground underline">
+                    Demander une autre carte ({game.skipsLeft ?? 0} restants)
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!card && game.verdict && lastResult && (
+        <div className={`p-3 rounded-xl mb-2 ${lastResult.accepted ? "bg-green-500/10 border border-green-500/30" : "bg-red-500/10 border border-red-500/30"}`}>
+          <p className="text-sm font-semibold">{lastResult.accepted ? `Carte réussie ! +${lastResult.points} pts` : "Carte refusée…"}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">« {lastResult.text} »</p>
+        </div>
+      )}
+
+      {!card && !game.verdict && game.state === "playing" && (
+        <p className="text-[11px] text-muted-foreground">Préparation de la carte suivante…</p>
+      )}
+    </GenericGameWrapper>
+  );
+}
+
+// ══════════════════════════════════════
 // MAIN GAME RENDERER
 // ══════════════════════════════════════
 export function GameRenderer({
@@ -1262,6 +1458,20 @@ export function GameRenderer({
       return <DiceGame game={game} {...common} onMove={(move) => onMove({ gameId: game.id, move })} onRematch={onRematch} onNextRound={onNextRound} />;
     case "quiz":
       return <QuizGame game={game} {...common} onMove={(data) => onMove({ gameId: game.id, ...data })} onRematch={onRematch} />;
+    case "code_secret":
+      return <CodeSecretGame game={game} {...common} onMove={(data) => onMove({ gameId: game.id, ...data })} onRematch={onRematch} />;
+    case "mot_intrus":
+      return <MotIntrusGame game={game} {...common} onMove={(data) => onMove({ gameId: game.id, ...data })} onRematch={onRematch} />;
+    case "devine_ce_que_je_pense":
+      return <DevineGame game={game} {...common} onMove={(data) => onMove({ gameId: game.id, ...data })} onRematch={onRematch} />;
+    case "a_quel_point":
+      return <AQuelPointGame game={game} {...common} onMove={(data) => onMove({ gameId: game.id, ...data })} onRematch={onRematch} />;
+    case "deux_verites":
+      return <DeuxVeritesGame game={game} {...common} onMove={(data) => onMove({ gameId: game.id, ...data })} onRematch={onRematch} />;
+    case "memoire_flash":
+      return <MemoireFlashGame game={game} {...common} onMove={(data) => onMove({ gameId: game.id, ...data })} onRematch={onRematch} />;
+    case "action_verite":
+      return <ActionVeriteGame game={game} {...common} onMove={(data) => onMove({ gameId: game.id, ...data })} onRematch={onRematch} />;
     default:
       return <p className="text-sm text-muted-foreground text-center">Jeu non supporté</p>;
   }
