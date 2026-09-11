@@ -14,7 +14,7 @@ import * as LucideIcons from "lucide-react";
 const {
   MessageCircle, Send, QrCode, ArrowLeft, Check, CheckCheck, Search, X,
   Camera, Shield, Mic, Paperclip, FileText, Square, Phone, PhoneOff,
-  Play, Pause, Trash2, Pencil, Download, Video, Smile, Loader2, Gamepad2, Users, MoreVertical
+  Play, Pause, Trash2, Pencil, Download, Video, Smile, Loader2, Gamepad2, Users, MoreVertical, Link, UserPlus
 } = LucideIcons;
 const ImageIcon = LucideIcons.Image;
 
@@ -82,18 +82,6 @@ function ChatPage() {
   const [showInviteInput, setShowInviteInput] = useState(false);
   const [inviteToken, setInviteToken] = useState("");
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const moreMenuRef = useRef<HTMLDivElement>(null);
-
-  // Close more menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
-        setShowMoreMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -703,7 +691,7 @@ function ChatPage() {
                     </button>
 
                     {/* More menu button - always visible */}
-                    <div className="relative" ref={moreMenuRef}>
+                    <div className="relative">
                       <button onClick={() => setShowMoreMenu(!showMoreMenu)}
                         className="p-2.5 rounded-xl bg-white/10 text-white/80 hover:bg-white/20 transition-colors"
                         title="Plus d'options">
@@ -715,13 +703,13 @@ function ChatPage() {
                         <div className="absolute right-0 top-full mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
                           <button onClick={() => { setShowMoreMenu(false); handleGenerateInviteLink(); }}
                             className="w-full px-4 py-3 text-left hover:bg-white/10 transition-colors flex items-center gap-3">
-                            <svg className="h-4 w-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                            <Link className="h-4 w-4 text-purple-400" />
                             <span className="text-sm">Lien d'invitation</span>
                           </button>
                           <button onClick={() => { setShowMoreMenu(false); setShowInviteInput(true); }}
                             className="w-full px-4 py-3 text-left hover:bg-white/10 transition-colors flex items-center gap-3">
-                            <svg className="h-4 w-4 text-orange-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-                            <span className="text-sm">RejoindreVia lien</span>
+                            <UserPlus className="h-4 w-4 text-orange-400" />
+                            <span className="text-sm">Rejoindre via lien</span>
                           </button>
                           <button onClick={() => { setShowMoreMenu(false); handleGenerateQR(); }}
                             className="sm:hidden w-full px-4 py-3 text-left hover:bg-white/10 transition-colors flex items-center gap-3">
