@@ -1129,10 +1129,13 @@ function CodeSecretGame({
   onMove: (data: any) => void; onRematch: () => void; onClose: () => void;
 }) {
   const [currentGuess, setCurrentGuess] = useState<string[]>([]);
-  const isMyTurn = game.currentGuesser === currentUserId;
+  const [currentCode, setCurrentCode] = useState<string[]>([]);
+  const isCreator = game.codeCreator === currentUserId;
+  const isGuesser = game.currentGuesser === currentUserId;
+  const isMyTurn = isGuesser && game.phase === 'guessing';
   
   const addSymbol = (symbol: string) => {
-    if (currentGuess.length >= 4) return;
+    if (currentGuess.length >= CODE_LENGTH) return;
     setCurrentGuess([...currentGuess, symbol]);
   };
   
@@ -1141,38 +1144,94 @@ function CodeSecretGame({
   };
   
   const submitGuess = () => {
-    if (currentGuess.length !== 4) return;
+    if (currentGuess.length !== CODE_LENGTH) return;
     onMove({ gameId: game.id, move: "guess", guess: currentGuess });
     setCurrentGuess([]);
+  };
+  
+  const addCodeSymbol = (symbol: string) => {
+    if (currentCode.length >= CODE_LENGTH) return;
+    onMove({ gameId: game.id, move: "set_code", symbol });
+    setCurrentCode(prev => [...prev, symbol]);
+  };
+  
+  const removeCodeSymbol = () => {
+    if (currentCode.length === 0) return;
+    const newCode = currentCode.slice(0, -1);
+    setCurrentCode(newCode);
+    onMove({ gameId: game.id, move: "set_code", symbol: newCode[newCode.length - 1] || '' });
+  };
+
+  const getColorClass = (symbol?: string) => {
+    switch (symbol) {
+      case '🔴': return 'bg-red-500';
+      case '🟢': return 'bg-green-500';
+      case '🟣': return 'bg-purple-500';
+      case '🟡': return 'bg-yellow-400';
+      case '🔵': return 'bg-blue-500';
+      case '🟠': return 'bg-orange-500';
+      default: return 'bg-white/10';
+    }
   };
 
   return (
     <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Le Code Secret">
-      {game.attempts && game.attempts.length > 0 && (
-        <div className="mb-4 space-y-1">
-          {game.attempts.map((attempt: any, i: number) => (
-            <div key={i} className="flex items-center gap-2 text-sm">
-              <span className="text-[10px] text-muted-foreground w-4">{i + 1}.</span>
-              <div className="flex gap-1">
-                {attempt.guess.map((s: string, j: number) => {
-                  const result = attempt.result?.[j];
-                  const bgColor = result?.status === 'correct' ? 'bg-green-500/30' :
-                                  result?.status === 'wrong_position' ? 'bg-orange-500/30' : 'bg-white/10';
-                  return <span key={j} className={`px-2 py-1 rounded ${bgColor}`}>{s}</span>;
-                })}
-              </div>
+      {/* ═══ CREATOR: choose the code ═══ */}
+      {(game.phase === 'setting_code' || game.phase === 'setting_code') && isCreator && (
+        <div>
+          <p className="text-[11px] text-primary font-semibold mb-2">
+            Choisis ton code secret ({currentCode.length}/{CODE_LENGTH})
+          </p>
+          <p className="text-[10px] text-muted-foreground mb-3">
+            {currentCode.length < CODE_LENGTH ? "Ajoute les symboles un par un :" : "Le code est prêt. L'adversaire va deviner..."}
+          </p>
+          {/* Show current code being built */}
+          <div className="flex justify-center gap-2 mb-3">
+            {currentCode.map((s, i) => (
+              <span key={i} className={`w-10 h-10 rounded-lg ${getColorClass(s)} flex items-center justify-center text-sm`}>
+                {s}
+              </span>
+            ))}
+            {Array.from({ length: CODE_LENGTH - currentCode.length }).map((_, i) => (
+              <span key={`empty-${i}`} className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center text-muted-foreground text-xs">?</span>
+            ))}
+          </div>
+          <div className="flex justify-center gap-2 mb-3">
+            {CS_SYMBOLS.map(s => (
+              <button key={s} onClick={() => addCodeSymbol(s)} disabled={currentCode.length >= CODE_LENGTH}
+                className="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-lg transition-colors disabled:opacity-40">
+                {s}
+              </button>
+            ))}
+          </div>
+          {currentCode.length > 0 && (
+            <div className="flex justify-center gap-2">
+              <button onClick={() => {
+                const newCode = currentCode.slice(0, -1);
+                setCurrentCode(newCode);
+                if (newCode.length > 0) {
+                  onMove({ gameId: game.id, move: "set_code", symbol: newCode[newCode.length - 1] });
+                } else {
+                  setCurrentCode([]);
+                }
+              }} className="px-4 py-2 rounded-lg bg-white/10 text-sm">
+                Retour
+              </button>
             </div>
-          ))}
+          )}
         </div>
       )}
 
-      {isMyTurn && game.phase === 'guessing' && (
+      {/* ═══ GUESSER: try to break the code ═══ */}
+      {isGuesser && game.phase === 'guessing' && (
         <div>
           <div className="flex justify-center gap-2 mb-3">
             {currentGuess.map((s, i) => (
-              <span key={i} className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-lg">{s}</span>
+              <span key={i} className={`w-10 h-10 rounded-lg ${getColorClass(s)} flex items-center justify-center text-sm`}>
+                {s}
+              </span>
             ))}
-            {Array.from({ length: 4 - currentGuess.length }).map((_, i) => (
+            {Array.from({ length: CODE_LENGTH - currentGuess.length }).map((_, i) => (
               <span key={`empty-${i}`} className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center text-muted-foreground text-xs">?</span>
             ))}
           </div>
@@ -1181,9 +1240,9 @@ function CodeSecretGame({
               <button key={s} onClick={() => addSymbol(s)} className="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-lg transition-colors">{s}</button>
             ))}
           </div>
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-center gap-2 mb-1">
             <button onClick={removeLast} className="px-4 py-2 rounded-lg bg-white/10 text-sm">Retour</button>
-            <button onClick={submitGuess} disabled={currentGuess.length !== 4}
+            <button onClick={submitGuess} disabled={currentGuess.length !== CODE_LENGTH}
               className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-bold disabled:opacity-40">
               Valider
             </button>
@@ -1191,12 +1250,54 @@ function CodeSecretGame({
         </div>
       )}
 
-      {game.phase === 'setting_code' && (
-        <p className="text-[11px] text-muted-foreground">Le createur du code prepare la partie...</p>
+      {/* ═══ PREVIOUS ATTEMPTS */}
+      {game.attempts && game.attempts.length > 0 && (
+        <div className="mb-4 space-y-1">
+          {game.attempts.map((attempt: any, i: number) => (
+            <div key={i} className="flex items-center gap-2 text-sm mb-2">
+              <span className="text-[10px] text-muted-foreground w-4">{i + 1}.</span>
+              <div className="flex gap-1">
+                {attempt.guess.map((s: string, j: number) => {
+                  const result = attempt.result?.[j];
+                  const bgColor = result?.status === 'correct' ? 'bg-green-500/30' :
+                                  result?.status === 'wrong_position' ? 'bg-orange-500/30' : 'bg-white/10';
+                  return <span key={j} className={`w-8 h-8 rounded ${bgColor} flex items-center justify-center text-xs`}>{s}</span>;
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ═══ LAST RESULT FEEDBACK */}
+      {game.lastResult && (
+        <div className={`p-3 rounded-xl mb-2 ${game.lastResult.correct ? 'bg-green-500/10 border border-green-500/30' : 'bg-white/5 border border-white/10'}`}>
+          {game.lastResult.correct ? (
+            <p className="text-sm font-semibold text-green-500">Code retrouve !</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {game.lastResult.result.filter(r => r.status === 'correct').length} bien places, 
+              {game.lastResult.result.filter(r => r.status === 'wrong_position').length} bons symboles a decplacer
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ═══ WAITING */}
+      {!isCreator && game.phase === 'setting_code' && (
+        <div className="text-center py-6">
+          <p className="text-sm text-muted-foreground">
+            En attente que <PlayerName id={game.codeCreator || ''} players={players} /> definit le code...
+          </p>
+        </div>
       )}
 
       {!isMyTurn && game.phase === 'guessing' && (
-        <p className="text-[11px] text-muted-foreground">En attente de l'adversaire...</p>
+        <div className="text-center py-6">
+          <p className="text-sm text-muted-foreground">
+            En attente...
+          </p>
+        </div>
       )}
     </GenericGameWrapper>
   );
