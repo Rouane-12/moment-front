@@ -10,6 +10,7 @@ import {
   Skull, Search, Drama, Info, Crown, User,
   ShieldCheck, VenetianMask, Gavel, MoonStar, SunMedium, Vote as VoteIcon,
   Hourglass, Lightbulb, Puzzle, Eye, MessagesSquare, Brain, DoorOpen, Send,
+  Dices, Flag, RotateCw, Dice1, Dice2, Dice3, Dice4, Dice5, Dice6,
 } from "lucide-react";
 
 export const Route = createFileRoute("/games")({ ssr: false, component: GamesPage });
@@ -79,7 +80,24 @@ type MotIntrusGame = {
   currentRound: { words: string[]; difficulty: string; points: number } | null;
 };
 
-type AnyGame = BuzzerGame | InfiltratedGame | MotIntrusGame | QuizGame;
+type DiceSpiraleGame = {
+  id: string; type: "dice_spirale"; multiplayer?: boolean;
+  players: string[]; createdBy: string;
+  state: "waiting" | "playing" | "finished";
+  phase: string;
+  turn: string;
+  board: Array<{ effect: string; value: number }>;
+  lastIndex: number;
+  pos: Record<string, number>;
+  scores: Record<string, number>;
+  dice: number | null;
+  lastRoll: { by: string; dice: number; from: number; to: number; at: number } | null;
+  rollsThisTurn: number;
+  log: Array<{ at: number; text: string }>;
+  winner: string | null;
+};
+
+type AnyGame = BuzzerGame | InfiltratedGame | MotIntrusGame | QuizGame | DiceSpiraleGame;
 
 type GameMode = {
   id: string; name: string; icon: ElementType;
@@ -142,7 +160,7 @@ function GamesPage() {
 
     // La page Jeux ne gère que les parties multijoueur (le quiz multijoueur
     // partage le type "quiz" avec le duel, d'où le marqueur `multiplayer`).
-    const MULTI_TYPES = ["infiltrated", "mot_intrus_multi", "buzzer_quiz"];
+    const MULTI_TYPES = ["infiltrated", "mot_intrus_multi", "buzzer_quiz", "dice_spirale"];
     const isMultiGame = (g: any) => !!g && (MULTI_TYPES.includes(g.type) || g.multiplayer === true);
 
     socket.on("game-invite", (data: { game: AnyGame; from: string }) => {
@@ -222,6 +240,7 @@ function GamesPage() {
     if (selectedMode.id === "infiltrated") s.emit("infiltrated-create", { players: selectedPlayers });
     else if (selectedMode.id === "quiz") s.emit("quiz-create", { players: selectedPlayers });
     else if (selectedMode.id === "mot_intrus_multi") s.emit("motintrusmulti-create", { players: selectedPlayers });
+    else if (selectedMode.id === "dice_spirale") s.emit("dicespirale-create", { players: selectedPlayers });
     setShowRules(null);
   };
 
@@ -242,6 +261,9 @@ function GamesPage() {
     }
     if (game.type === "quiz") {
       return <QuizSession key={game.id} game={game} socketRef={socketRef} me={user?.id || ""} nameOf={nameOf} exitGame={exitGame} />;
+    }
+    if (game.type === "dice_spirale") {
+      return <SpiraleSession key={game.id} game={game} socketRef={socketRef} me={user?.id || ""} nameOf={nameOf} exitGame={exitGame} />;
     }
     return <BuzzerSession key={game.id} game={game} socketRef={socketRef} me={user?.id || ""} nameOf={nameOf} exitGame={exitGame} />;
   }
@@ -571,7 +593,8 @@ function WaitingLobby({ game, me, nameOf, minLabel, onStart, onlineUsers }: {
     (game.type === "quiz" && m.id === "quiz") ||
     (game.type === "buzzer_quiz" && m.id === "buzzer_quiz") ||
     (game.type === "infiltrated" && m.id === "infiltrated") ||
-    (game.type === "mot_intrus_multi" && m.id === "mot_intrus_multi")
+    (game.type === "mot_intrus_multi" && m.id === "mot_intrus_multi") ||
+    (game.type === "dice_spirale" && m.id === "dice_spirale")
   );
   const canStart = game.players.length >= (mode?.minPlayers || 2);
   return (
@@ -1306,6 +1329,183 @@ function QuizSession({ game, socketRef, me, nameOf, exitGame }: {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════
+// SESSION — COURSE EN SPIRALE (plateau de dés multijoueur)
+// ═══════════════════════════════════════════════════════════════
+const SPIRALE_SIZE = 7;
+const PLAYER_COLORS = [
+  "bg-pink-500", "bg-sky-500", "bg-emerald-500", "bg-amber-500", "bg-violet-500", "bg-rose-500",
+];
+
+/** Trajet en spirale d'une grille n×n : index de case → [ligne, colonne]. */
+function spiralPath(n: number): Array<[number, number]> {
+  const coords: Array<[number, number]> = [];
+  let top = 0, bottom = n - 1, left = 0, right = n - 1;
+  while (top <= bottom && left <= right) {
+    for (let c = left; c <= right; c++) coords.push([top, c]);
+    top++;
+    for (let r = top; r <= bottom; r++) coords.push([r, right]);
+    right--;
+    if (top <= bottom) { for (let c = right; c >= left; c--) coords.push([bottom, c]); bottom--; }
+    if (left <= right) { for (let r = bottom; r >= top; r--) coords.push([r, left]); left++; }
+  }
+  return coords;
+}
+
+const SPIRALE_PATH = spiralPath(SPIRALE_SIZE);
+// Grille ligne par ligne : chaque cellule contient l'index de la case
+const SPIRALE_GRID: number[][] = (() => {
+  const g: number[][] = Array.from({ length: SPIRALE_SIZE }, () => new Array(SPIRALE_SIZE).fill(-1));
+  SPIRALE_PATH.forEach(([r, c], idx) => { g[r]![c] = idx; });
+  return g;
+})();
+
+function DieIcon({ value, className = "h-8 w-8" }: { value: number; className?: string }) {
+  const faces = [Dice1, Dice2, Dice3, Dice4, Dice5, Dice6];
+  const Icon = faces[Math.max(1, Math.min(6, value)) - 1] || Dice1;
+  return <Icon className={className} />;
+}
+
+function tileVisual(tile: { effect: string; value: number }) {
+  switch (tile.effect) {
+    case "plus": return { cls: "bg-green-500/15 border-green-500/30 text-green-300", text: `+${tile.value}` };
+    case "minus": return { cls: "bg-red-500/15 border-red-500/30 text-red-300", text: `−${tile.value}` };
+    case "relance": return { cls: "bg-yellow-500/15 border-yellow-500/30 text-yellow-300", text: "" };
+    case "rift": return { cls: "bg-violet-500/15 border-violet-500/30 text-violet-300", text: "" };
+    case "finish": return { cls: "bg-primary/25 border-primary/50 text-primary", text: "FIN" };
+    case "start": return { cls: "bg-sky-500/15 border-sky-500/30 text-sky-300", text: "DEP" };
+    default: return { cls: "bg-white/5 border-white/10 text-muted-foreground", text: "" };
+  }
+}
+
+function SpiraleSession({ game, socketRef, me, nameOf, exitGame }: {
+  game: DiceSpiraleGame; socketRef: RefObject<Socket | null>; me: string;
+  nameOf: (id: string) => string; exitGame: () => void;
+}) {
+  const myTurn = game.state === "playing" && game.turn === me;
+  const playersAt = (idx: number) => game.players.filter((p) => game.pos[p] === idx);
+  const formatLog = (text: string) => {
+    let out = text;
+    for (const id of game.players) out = out.split(id).join(nameOf(id));
+    return out;
+  };
+  const ranked = [...game.players].sort((a, b) => (game.pos[b] ?? 0) - (game.pos[a] ?? 0));
+
+  return (
+    <SessionShell
+      title={<span className="inline-flex items-center gap-1.5"><Dices className="h-4 w-4 text-primary" /> Course en Spirale</span>}
+      subtitle={
+        game.state === "waiting" ? "Salon en attente" :
+        game.state === "playing" ? (myTurn ? "C'est ton tour !" : `Au tour de ${nameOf(game.turn)}`) :
+        "Partie terminée"
+      }
+      onExit={exitGame}
+    >
+      {game.state === "waiting" && (
+        <WaitingLobby
+          game={game} me={me} nameOf={nameOf}
+          minLabel="Il faut au moins 2 joueurs pour lancer."
+          onStart={() => socketRef.current?.emit("dicespirale-start", { gameId: game.id })}
+          onlineUsers={new Set()}
+        />
+      )}
+
+      {game.state === "playing" && (
+        <div className="w-full max-w-[460px] mx-auto">
+          {/* Plateau en spirale — DÉPART en haut à gauche, FIN au centre */}
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5 w-full mb-3">
+            {SPIRALE_GRID.flat().map((idx) => {
+              const tile = game.board?.[idx] || { effect: "none", value: 0 };
+              const vis = tileVisual(tile);
+              const here = playersAt(idx);
+              return (
+                <div key={idx} className={`relative aspect-square rounded-lg border flex flex-col items-center justify-center ${vis.cls}`}>
+                  <span className="text-[9px] font-bold leading-none flex items-center">
+                    {tile.effect === "relance" ? <RotateCw className="h-3 w-3" />
+                      : tile.effect === "rift" ? <Zap className="h-3 w-3" />
+                      : tile.effect === "finish" ? <Flag className="h-3 w-3" />
+                      : vis.text}
+                  </span>
+                  {here.length > 0 && (
+                    <div className="absolute inset-x-0 bottom-0.5 flex justify-center gap-0.5">
+                      {here.map((p) => (
+                        <span
+                          key={p}
+                          title={nameOf(p)}
+                          className={`w-3.5 h-3.5 rounded-full border border-background text-[7px] font-bold text-white flex items-center justify-center ${PLAYER_COLORS[game.players.indexOf(p) % PLAYER_COLORS.length]}`}
+                        >
+                          {nameOf(p).charAt(0)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Dé + action */}
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0 text-primary">
+              {game.dice ? <DieIcon value={game.dice} /> : <Dices className="h-7 w-7 text-muted-foreground" />}
+            </div>
+            <button
+              onClick={() => socketRef.current?.emit("game-move", { gameId: game.id, move: "roll" })}
+              disabled={!myTurn}
+              className="flex-1 min-w-0 py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+            >
+              <Dices className="h-5 w-5 shrink-0" />
+              <span className="truncate">{myTurn ? "Lancer le dé" : `En attente de ${nameOf(game.turn)}`}</span>
+            </button>
+          </div>
+
+          {/* Positions */}
+          <div className="flex flex-wrap gap-2 justify-center mb-3">
+            {game.players.map((pId, i) => (
+              <span key={pId} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] ${pId === game.turn ? "bg-primary/20 border-primary/40" : "bg-white/5 border-white/10"}`}>
+                <span className={`w-2.5 h-2.5 rounded-full ${PLAYER_COLORS[i % PLAYER_COLORS.length]}`} />
+                <span className="max-w-[80px] truncate">{pId === me ? "Toi" : nameOf(pId)}</span>
+                <span className="font-bold">case {game.pos[pId] ?? 0}</span>
+              </span>
+            ))}
+          </div>
+
+          {game.log?.length > 0 && (
+            <div className="rounded-xl bg-white/5 border border-white/10 p-2 max-h-32 overflow-y-auto text-left">
+              {game.log.slice(-8).reverse().map((entry, i) => (
+                <p key={i} className="text-[10px] text-muted-foreground py-0.5 break-words">{formatLog(entry.text)}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {game.state === "finished" && (
+        <div className="max-w-md mx-auto text-center py-6">
+          <Trophy className="h-16 w-16 mx-auto mb-4 text-yellow-400" />
+          <h2 className="text-2xl font-bold mb-1">
+            {game.winner && game.winner !== "draw" ? `${nameOf(game.winner)} gagne !` : "Partie terminée"}
+          </h2>
+          <p className="text-xs text-muted-foreground mb-5">Premier arrivé à la FIN, au centre de la spirale.</p>
+          <div className="space-y-1.5 mb-6 text-left">
+            {ranked.map((pId) => (
+              <div key={pId} className={`flex items-center gap-3 px-3 py-2 rounded-xl border ${game.winner === pId ? "bg-yellow-500/15 border-yellow-500/40" : "bg-white/5 border-white/10"}`}>
+                <span className={`w-3 h-3 rounded-full ${PLAYER_COLORS[game.players.indexOf(pId) % PLAYER_COLORS.length]}`} />
+                <span className="text-sm flex-1 truncate">{nameOf(pId)}</span>
+                <span className="text-xs font-bold">case {game.pos[pId] ?? 0}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 justify-center">
+            <button onClick={() => socketRef.current?.emit("game-rematch", { gameId: game.id })} className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors">Revanche</button>
+            <button onClick={exitGame} className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 font-semibold hover:bg-white/10 transition-colors">Quitter</button>
+          </div>
+        </div>
+      )}
+    </SessionShell>
+  );
+}
+
 // ── Catalogue des modes multijoueur ────────────────────────────
 const GAME_MODES: GameMode[] = [
   {
@@ -1322,6 +1522,11 @@ const GAME_MODES: GameMode[] = [
     id: "mot_intrus_multi", name: "Mot Intrus", icon: Puzzle,
     description: "Course contre la montre — trouve l'intrus",
     minPlayers: 2, maxPlayers: 6, category: "Logique",
+  },
+  {
+    id: "dice_spirale", name: "Course en Spirale", icon: Dices,
+    description: "Plateau de dés : bonus, pièges et rifts jusqu'à la FIN",
+    minPlayers: 2, maxPlayers: 6, category: "Dés",
   },
 ];
 
@@ -1367,6 +1572,21 @@ const GAME_RULES: Record<string, { rules: string[]; tips: string[] }> = {
     tips: [
       "Cherche la catégorie commune : pays, animaux, couleurs…",
       "Les manches expertes contiennent des pièges sémantiques.",
+    ],
+  },
+  dice_spirale: {
+    rules: [
+      "2 à 6 joueurs. Le plateau est une spirale de 49 cases : on part de l'extérieur et la FIN est au centre.",
+      "Chacun son tour, tu lances UN dé et ton pion avance d'autant de cases.",
+      "La case d'arrivée s'applique tout de suite : +2, +5, +10 (bonus), −3, −5, −8 (pièges).",
+      "Cases spéciales : Relance (tu rejoues immédiatement) et Rift (tu échanges ta place avec le joueur de tête).",
+      "Le premier à atteindre la FIN au centre remporte la partie.",
+      "Tu peux abandonner à tout moment : la partie s'arrête alors pour tout le monde.",
+    ],
+    tips: [
+      "Les pièges font plus mal près du centre : un −8 peut te renvoyer très loin.",
+      "Si tu es dernier, le Rift est ta meilleure chance de revenir.",
+      "Attention : un bonus peut t'envoyer pile sur la FIN, mais aussi sur un piège.",
     ],
   },
 };

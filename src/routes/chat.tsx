@@ -20,11 +20,12 @@ const ImageIcon = LucideIcons.Image;
 
 // Libellés français des jeux (vraies icônes + noms corrects dans l'entête)
 const GAME_LABELS: Record<string, string> = {
-  reflex: "Le Réflexe", tictactoe: "Morpion", rps: "Pierre-Feuille-Ciseaux", dice: "Duel de Dés",
+  reflex: "Le Réflexe", tictactoe: "Morpion", rps: "Pierre-Feuille-Ciseaux", dice: "Lancer de Dés",
   quiz: "Quiz Culture", code_secret: "Le Code Secret", mot_intrus: "Le Mot Intrus",
   devine_ce_que_je_pense: "Devine ce que je pense", a_quel_point: "À quel point tu me connais ?",
   deux_verites: "Une Vérité, Deux Mensonges", memoire_flash: "Mémoire Flash",
-  action_verite: "Action ou Vérité", buzzer_quiz: "Quiz", infiltrated: "L'Infiltré", mot_intrus_multi: "Mot Intrus",
+  action_verite: "Action ou Vérité", dice_duel: "Duel de Dés", dice_spirale: "Course en Spirale",
+  buzzer_quiz: "Quiz", infiltrated: "L'Infiltré", mot_intrus_multi: "Mot Intrus",
 };
 
 export const Route = createFileRoute("/chat")({ ssr: false, component: ChatPage });

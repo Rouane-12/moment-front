@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 const DICE_FACES = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 const RPS_EMOJI: Record<string, string> = { rock: "✊", paper: "✋", scissors: "✌️" };
 
-export type GameType = "reflex" | "tictactoe" | "rps" | "dice" | "quiz" | "code_secret" | "mot_intrus" | "devine_ce_que_je_pense" | "a_quel_point" | "deux_verites" | "memoire_flash" | "action_verite";
+export type GameType = "reflex" | "tictactoe" | "rps" | "dice" | "dice_duel" | "quiz" | "code_secret" | "mot_intrus" | "devine_ce_que_je_pense" | "a_quel_point" | "deux_verites" | "memoire_flash" | "action_verite";
 
 export interface QuizQuestion {
   id: string;
@@ -88,6 +88,15 @@ export interface GameState {
   round?: number;
   myRole?: "creator" | "guesser" | "spectator";
   colors?: string[];
+  symbols?: string[];
+  // Duel de Dés (combat 2 joueurs)
+  roll?: number[] | null;
+  hp?: Record<string, number>;
+  shield?: Record<string, number>;
+  maxHp?: number;
+  turn?: string;
+  rerollUsed?: boolean;
+  log?: Array<{ at: number; text: string }>;
   codeLength?: number;
   maxAttempts?: number;
   myCode?: string[];
@@ -141,6 +150,9 @@ const iconMap: Record<string, any> = {
   Mask: LucideIcons.UserX,
   Hand: LucideIcons.Hand,
   Dice1: LucideIcons.Dice1,
+  Swords: LucideIcons.Swords,
+  Shield: LucideIcons.Shield,
+  RotateCw: LucideIcons.RotateCw,
   Grid3X3: LucideIcons.Grid3X3,
   Target: LucideIcons.Target,
   MemoryStick: LucideIcons.MemoryStick,
@@ -159,13 +171,29 @@ const GAME_RULES: Record<GameType, { title: string; rules: string[]; tips: strin
     tips: ["Ne cliquez pas trop tot", "Concentrez-vous sur l'ecran"],
   },
   dice: {
-    title: "Duel de Des",
+    title: "Lancer de Dés",
     rules: [
       "Chaque joueur lance 2 des",
       "Le total le plus haut gagne la manche",
       "3 manches au total",
     ],
     tips: ["C'est du hasard pur !"],
+  },
+  dice_duel: {
+    title: "Duel de Dés",
+    rules: [
+      "Chacun commence avec 30 PV et 0 bouclier.",
+      "À ton tour, le serveur lance 2 dés pour toi.",
+      "⚔️ Attaquer : les dégâts valent la somme des dés, le bouclier adverse les absorbe en premier.",
+      "🛡️ Défendre : tu ajoutes la somme des dés à ton bouclier (20 max).",
+      "🔄 Relancer : une seule fois par tour, tu relances les deux dés.",
+      "Le premier à faire tomber l'autre à 0 PV gagne le duel.",
+    ],
+    tips: [
+      "Un gros lancer vaut mieux utilisé en attaque — sauf si tu es presque à 0 PV.",
+      "Le bouclier se consomme : poser un gros bouclier juste avant l'attaque adverse peut tout changer.",
+      "Relance quand ton total est très faible (2 à 4).",
+    ],
   },
   rps: {
     title: "Pierre-Feuille-Ciseaux",
@@ -280,7 +308,8 @@ export function GameMenu({ onSelect, onClose }: { onSelect: (type: GameType) => 
     // Jeux de logique
     { type: "tictactoe", icon: "Grid3X3", name: "Morpion", desc: "Aligne 3 symboles", category: "Logique" },
     { type: "quiz", icon: "Brain", name: "Quiz Culture", desc: "20 questions de culture generale", category: "Culture" },
-    { type: "code_secret", icon: "Lock", name: "Le Code Secret", desc: "Devinez le code en 4 symboles", category: "Logique" },
+    { type: "code_secret", icon: "Lock", name: "Le Code Secret", desc: "Devinez le code de 4 objets", category: "Logique" },
+    { type: "dice_duel", icon: "Swords", name: "Duel de Dés", desc: "Combat : attaque, défense, relance", category: "Logique" },
     { type: "mot_intrus", icon: "Search", name: "Le Mot Intrus", desc: "Trouvez le mot different", category: "Logique" },
     { type: "memoire_flash", icon: "MemoryStick", name: "Memoire Flash", desc: "Reproduisez la sequence de couleurs", category: "Reflexes" },
     // Jeux sociaux
@@ -377,7 +406,8 @@ const GAME_NAMES: Record<GameType, string> = {
   reflex: "Le Reflexe",
   tictactoe: "Morpion",
   rps: "Pierre-Feuille-Ciseaux",
-  dice: "Duel de Des",
+  dice: "Lancer de Dés",
+  dice_duel: "Duel de Dés",
   quiz: "Quiz Culture",
   code_secret: "Le Code Secret",
   mot_intrus: "Le Mot Intrus",
@@ -1165,10 +1195,16 @@ function GenericGameWrapper({
 // CODE SECRET GAME
 // ══════════════════════════════════════
 const CODE_LENGTH = 4;
-const CS_SYMBOLS = ["red", "green", "blue", "yellow", "purple", "orange"];
-const COLOR_CLASSES: Record<string, string> = {
-  red: "bg-red-500", green: "bg-green-500", blue: "bg-blue-500",
-  yellow: "bg-yellow-400", purple: "bg-purple-500", orange: "bg-orange-500",
+// Le Code Secret utilise des OBJETS (vraies icônes), jamais des couleurs.
+// La position est validée par le CONTOUR : vert = bien placé, orange = mal placé.
+const CS_SYMBOLS = ["apple", "star", "heart", "rocket", "key", "ghost"];
+const SYMBOL_META: Record<string, { Icon: any; tint: string; label: string }> = {
+  apple: { Icon: LucideIcons.Apple, tint: "text-red-400", label: "Pomme" },
+  star: { Icon: LucideIcons.Star, tint: "text-yellow-400", label: "Etoile" },
+  heart: { Icon: LucideIcons.Heart, tint: "text-pink-400", label: "Coeur" },
+  rocket: { Icon: LucideIcons.Rocket, tint: "text-sky-400", label: "Fusee" },
+  key: { Icon: LucideIcons.Key, tint: "text-amber-400", label: "Cle" },
+  ghost: { Icon: LucideIcons.Ghost, tint: "text-violet-400", label: "Fantome" },
 };
 
 function CodeSecretGame({
@@ -1184,7 +1220,7 @@ function CodeSecretGame({
   const codeLength = game.codeLength ?? CODE_LENGTH;
   const maxAttempts = game.maxAttempts ?? 6;
   const myCode = game.myCode ?? [];
-  const colors = (game.colors && game.colors.length ? game.colors : CS_SYMBOLS);
+  const symbols = (game.symbols && game.symbols.length ? game.symbols : CS_SYMBOLS);
 
   // On vide la proposition en cours dès qu'on change de phase ou de manche
   useEffect(() => { setCurrentGuess([]); }, [game.phase, game.round]);
@@ -1207,12 +1243,39 @@ function CodeSecretGame({
     onMove({ gameId: game.id, move: "set_code", symbol: color, action: "add" });
   };
 
-  const getColorClass = (color?: string) => COLOR_CLASSES[color || ""] || "bg-white/10";
-
-  const renderPeg = (color: string, status: string | undefined, key: number | string) => {
-    const ring = status === "correct" ? "ring-2 ring-green-400" : status === "wrong_position" ? "ring-2 ring-orange-400" : "";
-    return <span key={key} className={`w-9 h-9 rounded-lg ${getColorClass(color)} ${ring} border border-white/20`} />;
+  // Une icône d'objet (jamais d'emoji)
+  const renderSymbolIcon = (symbol: string, className = "h-5 w-5") => {
+    const meta = SYMBOL_META[symbol];
+    const Icon = meta ? meta.Icon : LucideIcons.HelpCircle;
+    return <Icon className={`${className} ${meta ? meta.tint : "text-white"}`} />;
   };
+
+  // Un pion : l'objet, entouré de vert (bien placé) ou d'orange (mal placé)
+  const renderPeg = (symbol: string, status: string | undefined, key: number | string) => {
+    const ring =
+      status === "correct" ? "ring-2 ring-green-400 bg-green-500/10 border-transparent"
+      : status === "wrong_position" ? "ring-2 ring-orange-400 bg-orange-500/10 border-transparent"
+      : status === "absent" ? "border-white/10 bg-white/5 opacity-40"
+      : "border-white/20 bg-white/5";
+    return (
+      <span key={key} className={`w-10 h-10 rounded-xl border flex items-center justify-center ${ring}`}>
+        {renderSymbolIcon(symbol, "h-5 w-5")}
+      </span>
+    );
+  };
+
+  // Bouton de sélection d'un objet
+  const renderPicker = (symbol: string, onClick: () => void, disabled = false) => (
+    <button
+      key={symbol}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={SYMBOL_META[symbol]?.label || symbol}
+      className="w-11 h-11 rounded-xl border border-white/20 bg-white/5 flex items-center justify-center transition-transform hover:scale-105 hover:bg-white/10 disabled:opacity-40"
+    >
+      {renderSymbolIcon(symbol, "h-6 w-6")}
+    </button>
+  );
 
   return (
     <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Le Code Secret">
@@ -1227,22 +1290,18 @@ function CodeSecretGame({
           </p>
           <p className="text-[10px] text-muted-foreground mb-3">
             {myCode.length < codeLength
-              ? "Compose ton code couleur par couleur, puis l'autre devra le deviner."
+              ? "Compose ton code objet par objet, puis l'autre devra le deviner."
               : "Code verrouille. L'adversaire va deviner..."}
           </p>
           {/* Le code en construction */}
           <div className="flex justify-center gap-2 mb-3">
             {myCode.map((c, i) => renderPeg(c, undefined, i))}
             {Array.from({ length: codeLength - myCode.length }).map((_, i) => (
-              <span key={`empty-${i}`} className="w-9 h-9 rounded-lg bg-white/5 border border-dashed border-white/15" />
+              <span key={`empty-${i}`} className="w-10 h-10 rounded-xl bg-white/5 border border-dashed border-white/15" />
             ))}
           </div>
           <div className="flex justify-center gap-2 mb-3 flex-wrap">
-            {colors.map((c) => (
-              <button key={c} onClick={() => addCodeSymbol(c)} disabled={myCode.length >= codeLength}
-                className={`w-10 h-10 rounded-lg ${getColorClass(c)} border border-white/20 transition-transform hover:scale-105 disabled:opacity-40`}
-                aria-label={c} />
-            ))}
+            {symbols.map((c) => renderPicker(c, () => addCodeSymbol(c), myCode.length >= codeLength))}
           </div>
           {myCode.length > 0 && (
             <div className="flex justify-center gap-2">
@@ -1273,14 +1332,11 @@ function CodeSecretGame({
           <div className="flex justify-center gap-2 mb-3">
             {currentGuess.map((c, i) => renderPeg(c, undefined, i))}
             {Array.from({ length: codeLength - currentGuess.length }).map((_, i) => (
-              <span key={`empty-${i}`} className="w-9 h-9 rounded-lg bg-white/5 border border-dashed border-white/15" />
+              <span key={`empty-${i}`} className="w-10 h-10 rounded-xl bg-white/5 border border-dashed border-white/15" />
             ))}
           </div>
           <div className="flex justify-center gap-2 mb-3 flex-wrap">
-            {colors.map((c) => (
-              <button key={c} onClick={() => addSymbol(c)} aria-label={c}
-                className={`w-10 h-10 rounded-lg ${getColorClass(c)} border border-white/20 transition-transform hover:scale-105`} />
-            ))}
+            {symbols.map((c) => renderPicker(c, () => addSymbol(c)))}
           </div>
           <div className="flex justify-center gap-2 mb-1">
             <button onClick={removeLast} className="px-4 py-2 rounded-lg bg-white/10 text-sm">Retour</button>
@@ -1289,9 +1345,19 @@ function CodeSecretGame({
               Valider
             </button>
           </div>
-          <div className="flex justify-center gap-4 mt-3 text-[10px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded bg-white/20 ring-2 ring-green-400 inline-block" /> bonne position</span>
-            <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded bg-white/20 ring-2 ring-orange-400 inline-block" /> mauvaise position</span>
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-3 text-[10px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-6 h-6 rounded-lg ring-2 ring-green-400 flex items-center justify-center"><LucideIcons.CircleDot className="h-3.5 w-3.5" /></span>
+              bon objet, bonne place
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-6 h-6 rounded-lg ring-2 ring-orange-400 flex items-center justify-center"><LucideIcons.CircleDot className="h-3.5 w-3.5" /></span>
+              bon objet, mauvaise place
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-6 h-6 rounded-lg border border-white/10 opacity-40 flex items-center justify-center"><LucideIcons.CircleDot className="h-3.5 w-3.5" /></span>
+              objet absent
+            </span>
           </div>
         </div>
       )}
@@ -1896,6 +1962,114 @@ function ActionVeriteGame({
 }
 
 // ══════════════════════════════════════
+// DUEL DE DÉS (combat 2 joueurs)
+// ══════════════════════════════════════
+function DieFace({ value, className = "h-9 w-9" }: { value: number; className?: string }) {
+  const name = `Dice${Math.max(1, Math.min(6, value))}`;
+  const Icon = (LucideIcons as any)[name] || LucideIcons.Dice1;
+  return <Icon className={className} />;
+}
+
+function DiceDuelGame({
+  game, currentUserId, players, onMove, onRematch, onClose,
+}: {
+  game: GameState; currentUserId: string; players: Record<string, GamePlayer>;
+  onMove: (data: any) => void; onRematch: () => void; onClose: () => void;
+}) {
+  const maxHp = game.maxHp || 30;
+  const hp = game.hp || {};
+  const shield = game.shield || {};
+  const roll = game.roll || null;
+  const myTurn = game.turn === currentUserId;
+  const sum = roll ? (roll[0] ?? 0) + (roll[1] ?? 0) : 0;
+
+  const nameOf = (id: string) => (id === currentUserId ? "Toi" : players[id]?.firstName || "Joueur");
+  // Les messages du serveur contiennent des identifiants : on les remplace par les noms
+  const formatLog = (text: string) => {
+    let out = text;
+    for (const id of game.players) out = out.split(id).join(nameOf(id));
+    return out;
+  };
+
+  const health = (id: string) => {
+    const value = hp[id] ?? maxHp;
+    const pct = Math.max(0, Math.min(100, (value / maxHp) * 100));
+    const low = pct <= 30;
+    return (
+      <div key={id} className="text-left">
+        <div className="flex items-center justify-between text-[10px] mb-1">
+          <span className={`truncate ${id === currentUserId ? "font-bold" : "text-muted-foreground"}`}>{nameOf(id)}</span>
+          <span className={low ? "text-red-400 font-bold" : "text-muted-foreground"}>{value} PV</span>
+        </div>
+        <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+          <div className={`h-full rounded-full transition-all ${low ? "bg-red-500" : "bg-green-500"}`} style={{ width: `${pct}%` }} />
+        </div>
+        {(shield[id] || 0) > 0 && (
+          <p className="text-[10px] text-sky-300 mt-1 inline-flex items-center gap-1">
+            <LucideIcons.Shield className="h-3 w-3" /> Bouclier {shield[id]}
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Duel de Dés">
+      <div className="space-y-3 mb-3">
+        {health(game.players[0] ?? "")}
+        {health(game.players[1] ?? "")}
+      </div>
+
+      {/* Le lancer en cours */}
+      <div className="rounded-2xl bg-white/5 border border-white/10 py-3 mb-3">
+        <p className="text-[10px] text-muted-foreground mb-2">
+          {myTurn ? "C'est ton tour" : `Au tour de ${nameOf(game.turn || "")}`}
+        </p>
+        {roll ? (
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-primary"><DieFace value={roll[0] ?? 1} /></span>
+            <span className="text-muted-foreground font-bold">+</span>
+            <span className="text-primary"><DieFace value={roll[1] ?? 1} /></span>
+            <span className="ml-2 text-xl font-black">{sum}</span>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">En attente du lancer…</p>
+        )}
+      </div>
+
+      {myTurn && game.phase === "choose" ? (
+        <div className="space-y-2">
+          <button onClick={() => onMove({ move: "attack" })}
+            className="w-full py-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 font-semibold text-sm hover:bg-red-500/30 transition-colors inline-flex items-center justify-center gap-2">
+            <LucideIcons.Swords className="h-4 w-4" /> Attaquer — {sum} dégât(s)
+          </button>
+          <button onClick={() => onMove({ move: "defend" })}
+            className="w-full py-3 rounded-xl bg-sky-500/20 border border-sky-500/40 text-sky-200 font-semibold text-sm hover:bg-sky-500/30 transition-colors inline-flex items-center justify-center gap-2">
+            <LucideIcons.Shield className="h-4 w-4" /> Défendre — bouclier +{sum}
+          </button>
+          <button onClick={() => onMove({ move: "reroll" })} disabled={game.rerollUsed}
+            className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10 text-xs font-medium hover:bg-white/10 transition-colors disabled:opacity-40 inline-flex items-center justify-center gap-2">
+            <LucideIcons.RotateCw className="h-3.5 w-3.5" /> {game.rerollUsed ? "Relance déjà utilisée" : "Relancer les dés"}
+          </button>
+        </div>
+      ) : (
+        <p className="text-[11px] text-muted-foreground text-center py-2">
+          {nameOf(game.turn || "")} réfléchit à son coup…
+        </p>
+      )}
+
+      {(game.log?.length || 0) > 0 && (
+        <div className="mt-3 rounded-xl bg-white/5 border border-white/10 p-2 max-h-28 overflow-y-auto text-left">
+          {game.log!.slice(-6).reverse().map((entry, i) => (
+            <p key={i} className="text-[10px] text-muted-foreground py-0.5">{formatLog(entry.text)}</p>
+          ))}
+        </div>
+      )}
+    </GenericGameWrapper>
+  );
+}
+
+// ══════════════════════════════════════
 // MAIN GAME RENDERER
 // ══════════════════════════════════════
 export function GameRenderer({
@@ -1916,6 +2090,8 @@ export function GameRenderer({
       return <RPSGame game={game} {...common} onMove={(choice) => onMove({ gameId: game.id, choice })} onRematch={onRematch} onNextRound={onNextRound} />;
     case "dice":
       return <DiceGame game={game} {...common} onMove={(move) => onMove({ gameId: game.id, move })} onRematch={onRematch} onNextRound={onNextRound} />;
+    case "dice_duel":
+      return <DiceDuelGame game={game} {...common} onMove={(move) => onMove({ gameId: game.id, move })} onRematch={onRematch} />;
     case "quiz":
       return <QuizGame game={game} {...common} onMove={(data) => onMove({ gameId: game.id, ...data })} onRematch={onRematch} />;
     case "code_secret":
