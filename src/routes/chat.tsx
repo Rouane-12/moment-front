@@ -14,9 +14,18 @@ import * as LucideIcons from "lucide-react";
 const {
   MessageCircle, Send, QrCode, ArrowLeft, Check, CheckCheck, Search, X,
   Camera, Shield, Mic, Paperclip, FileText, Square, Phone, PhoneOff,
-  Play, Pause, Trash2, Pencil, Download, Video, Smile, Loader2, Gamepad2, Users, MoreVertical
+  Play, Pause, Trash2, Pencil, Download, Video, Smile, Loader2, Gamepad2, Users, MoreVertical, Flag
 } = LucideIcons;
 const ImageIcon = LucideIcons.Image;
+
+// Libellés français des jeux (vraies icônes + noms corrects dans l'entête)
+const GAME_LABELS: Record<string, string> = {
+  reflex: "Le Réflexe", tictactoe: "Morpion", rps: "Pierre-Feuille-Ciseaux", dice: "Duel de Dés",
+  quiz: "Quiz Culture", code_secret: "Le Code Secret", mot_intrus: "Le Mot Intrus",
+  devine_ce_que_je_pense: "Devine ce que je pense", a_quel_point: "À quel point tu me connais ?",
+  deux_verites: "Une Vérité, Deux Mensonges", memoire_flash: "Mémoire Flash",
+  action_verite: "Action ou Vérité", buzzer_quiz: "Quiz", infiltrated: "L'Infiltré", mot_intrus_multi: "Mot Intrus",
+};
 
 export const Route = createFileRoute("/chat")({ ssr: false, component: ChatPage });
 
@@ -78,6 +87,7 @@ function ChatPage() {
   // Invitation à un jeu multijoueur (page Jeux) reçue pendant qu'on est dans le chat
   const [multiInvite, setMultiInvite] = useState<{ type: string; from: string } | null>(null);
   const [activeGame, setActiveGame] = useState<any>(null);
+  const [gameAbandonNotice, setGameAbandonNotice] = useState<string | null>(null);
   const [gamePlayers, setGamePlayers] = useState<Record<string, any>>({});
   const [showInviteLink, setShowInviteLink] = useState(false);
   const [inviteLink, setInviteLink] = useState("");
@@ -146,8 +156,10 @@ function ChatPage() {
     };
 
     const MULTIPLAYER_GAMES = ["buzzer_quiz", "infiltrated", "mot_intrus_multi"];
+    // Une partie créée depuis la page Jeux (y compris le quiz multijoueur)
+    const isMultiplayerGame = (g: any) => !!g && (MULTIPLAYER_GAMES.includes(g.type) || g.multiplayer === true);
     socket.on("game-invite", (data: { game: any; from: string }) => {
-      if (data.game && MULTIPLAYER_GAMES.includes(data.game.type)) {
+      if (isMultiplayerGame(data.game)) {
         setMultiInvite({ type: data.game.type, from: data.from });
         return;
       }
@@ -166,14 +178,14 @@ function ChatPage() {
     });
 
     socket.on("game-start", (data: { game: any }) => {
-      if (data.game && MULTIPLAYER_GAMES.includes(data.game.type)) return;
+      if (isMultiplayerGame(data.game)) return;
       console.log("🎮 game-start received:", data.game?.type, data.game?.state);
       setActiveGame(data.game);
       setGamePlayers(resolveGamePlayers(data.game));
     });
 
     socket.on("game-state", (data: { game: any }) => {
-      if (data.game && MULTIPLAYER_GAMES.includes(data.game.type)) return;
+      if (isMultiplayerGame(data.game)) return;
       setActiveGame(data.game);
       // Merge — don't overwrite existing good names
       setGamePlayers(prev => {
@@ -185,6 +197,12 @@ function ChatPage() {
         });
         return merged;
       });
+    });
+
+    // Un joueur a abandonné : la partie s'arrête pour tout le monde
+    socket.on("game-abandoned", (data: { by?: string }) => {
+      setActiveGame(null);
+      setGameAbandonNotice(data?.by || "un joueur");
     });
 
     socket.on("presence-update", (data: { userId: string; online: boolean }) => {
@@ -580,11 +598,18 @@ function ChatPage() {
     });
   };
 
+  // Fermer / abandonner : la partie s'arrête pour tous les joueurs
   const handleGameClose = () => {
     if (activeGame && socketRef.current) {
-      socketRef.current.emit("game-close", { gameId: activeGame.id });
+      socketRef.current.emit("game-abandon", { gameId: activeGame.id });
     }
     setActiveGame(null);
+  };
+
+  const handleGameAbandon = () => {
+    if (!activeGame || !socketRef.current) return;
+    if (!window.confirm("Abandonner la partie ? Elle s'arrêtera pour tout le monde.")) return;
+    handleGameClose();
   };
 
   const handleGameMove = (data: any) => {
@@ -1282,13 +1307,24 @@ function ChatPage() {
 
       {/* ── ACTIVE GAME OVERLAY ── */}
       {activeGame && activeGame.state !== "waiting" && (
-        <div className="fixed inset-0 z-[250] bg-black/70 flex items-center justify-center p-4" onClick={handleGameClose}>
-          <div className={`bg-[#111] border border-white/10 rounded-2xl overflow-hidden w-full relative ${activeGame.type === "quiz" ? "max-w-lg" : "max-w-xs"}`} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10">
-              <span className="text-xs font-bold text-primary">🎮 {activeGame.type.toUpperCase()}</span>
-              <button onClick={handleGameClose} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">✕</button>
+        <div className="fixed inset-0 z-[250] bg-black/70 flex items-center justify-center p-3 sm:p-4">
+          <div
+            className={`bg-[#111] border border-white/10 rounded-2xl overflow-hidden w-full relative max-h-[92vh] flex flex-col ${activeGame.type === "quiz" ? "max-w-lg" : "max-w-[22rem]"}`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 border-b border-white/10 shrink-0">
+              <span className="text-xs font-bold text-primary inline-flex items-center gap-1.5 min-w-0">
+                <Gamepad2 className="h-4 w-4 shrink-0" />
+                <span className="truncate">{GAME_LABELS[activeGame.type] || "Jeu"}</span>
+              </span>
+              <button
+                onClick={handleGameAbandon}
+                className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-[11px] font-semibold hover:bg-red-500/25 transition-colors"
+              >
+                <Flag className="h-3.5 w-3.5" /> Abandonner
+              </button>
             </div>
-            <div className={`${activeGame.type === "quiz" ? "p-3 max-h-[85vh] overflow-y-auto" : "p-4"}`}>
+            <div className={`${activeGame.type === "quiz" ? "p-3" : "p-4"} overflow-y-auto overflow-x-hidden`}>
               <GameRenderer
                 game={activeGame}
                 currentUserId={user?.id || ""}
@@ -1296,10 +1332,24 @@ function ChatPage() {
                 onMove={handleGameMove}
                 onRematch={handleGameRematch}
                 onNextRound={handleGameNextRound}
-                onClose={handleGameClose}
+                onClose={handleGameAbandon}
               />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── PARTIE ABANDONNÉE ── */}
+      {gameAbandonNotice && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[260] bg-[#111] border border-red-500/40 rounded-2xl px-4 py-3 shadow-2xl flex items-center gap-3 max-w-[92vw]">
+          <Flag className="h-4 w-4 text-red-400 shrink-0" />
+          <p className="text-xs">
+            {gameAbandonNotice === "un joueur" ? "Un joueur a abandonné" : `${gamePlayers[gameAbandonNotice]?.firstName || "Un joueur"} a abandonné la partie`}
+            {" "}— la partie est annulée.
+          </p>
+          <button onClick={() => setGameAbandonNotice(null)} className="p-1.5 rounded-lg hover:bg-white/10 shrink-0">
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 

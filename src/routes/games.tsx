@@ -9,7 +9,7 @@ import {
   ArrowLeft, Users, Play, Zap, Trophy, Clock, Check, X, Loader2, Gamepad2,
   Skull, Search, Drama, Info, Crown, User,
   ShieldCheck, VenetianMask, Gavel, MoonStar, SunMedium, Vote as VoteIcon,
-  Hourglass, Lightbulb, Puzzle, Eye, MessagesSquare,
+  Hourglass, Lightbulb, Puzzle, Eye, MessagesSquare, Brain, DoorOpen, Send,
 } from "lucide-react";
 
 export const Route = createFileRoute("/games")({ ssr: false, component: GamesPage });
@@ -30,6 +30,19 @@ type BuzzerGame = {
   currentQuestion: { id: string; question: string; answers: string[]; difficulty: string; points: number } | null;
   pstate: string; currentBuzz: string | null; buzzOrder: string[]; deadline: number | null;
   lastQuestionResult: any; scoresHistory: any[]; winner: string | null; createdBy: string;
+};
+
+type QuizGame = {
+  id: string; type: "quiz";
+  players: string[]; scores: Record<string, number>; correctCount: Record<string, number>;
+  state: "waiting" | "playing" | "finished";
+  quizStatus: "generating" | "ready" | "error"; quizError?: string | null;
+  questions: Array<{ id: string; question: string; answers: string[]; difficulty: string; points: number }>;
+  order: number[]; progress: number;
+  pstate: "idle" | "question" | "feedback" | "done";
+  deadline: number | null; lastResult: any;
+  opponents: Array<{ id: string; progress: number; score: number }>;
+  winner: string | null; createdBy: string;
 };
 
 type InfiltratedGame = {
@@ -66,7 +79,7 @@ type MotIntrusGame = {
   currentRound: { words: string[]; difficulty: string; points: number } | null;
 };
 
-type AnyGame = BuzzerGame | InfiltratedGame | MotIntrusGame;
+type AnyGame = BuzzerGame | InfiltratedGame | MotIntrusGame | QuizGame;
 
 type GameMode = {
   id: string; name: string; icon: ElementType;
@@ -107,6 +120,7 @@ function GamesPage() {
   const [game, setGame] = useState<AnyGame | null>(null);
   const [selectedGameMode, setSelectedGameMode] = useState<string>("infiltrated");
   const [showRules, setShowRules] = useState<string | null>(null);
+  const [abandonNotice, setAbandonNotice] = useState<string | null>(null);
 
   const resetSessionState = () => {};
 
@@ -126,13 +140,18 @@ function GamesPage() {
       setOnlineUsers(new Set(data.userIds || []));
     });
 
+    // La page Jeux ne gère que les parties multijoueur (le quiz multijoueur
+    // partage le type "quiz" avec le duel, d'où le marqueur `multiplayer`).
+    const MULTI_TYPES = ["infiltrated", "mot_intrus_multi", "buzzer_quiz"];
+    const isMultiGame = (g: any) => !!g && (MULTI_TYPES.includes(g.type) || g.multiplayer === true);
+
     socket.on("game-invite", (data: { game: AnyGame; from: string }) => {
-      if (!data.game) return;
+      if (!isMultiGame(data.game)) return;
       setGame(data.game);
     });
 
     socket.on("game-start", (data: { game: AnyGame }) => {
-      if (!data.game) return;
+      if (!isMultiGame(data.game)) return;
       setGame(data.game);
     });
 
@@ -141,7 +160,14 @@ function GamesPage() {
         setGame(null);
         return;
       }
+      if (!isMultiGame(data.game)) return;
       setGame(data.game);
+    });
+
+    // Un joueur a abandonné : la partie s'arrête pour tout le monde
+    socket.on("game-abandoned", (data: { by?: string }) => {
+      setGame(null);
+      setAbandonNotice(data?.by || "un joueur");
     });
 
     socket.on("presence-update", (data: { userId: string; online: boolean }) => {
@@ -194,7 +220,7 @@ function GamesPage() {
     if (selectedPlayers.length + 1 < selectedMode.minPlayers) return;
     const s = socketRef.current;
     if (selectedMode.id === "infiltrated") s.emit("infiltrated-create", { players: selectedPlayers });
-    else if (selectedMode.id === "buzzer_quiz") s.emit("buzzer-create", { players: selectedPlayers });
+    else if (selectedMode.id === "quiz") s.emit("quiz-create", { players: selectedPlayers });
     else if (selectedMode.id === "mot_intrus_multi") s.emit("motintrusmulti-create", { players: selectedPlayers });
     setShowRules(null);
   };
@@ -204,7 +230,8 @@ function GamesPage() {
   // ══════════════════════════════════════════════════════════════
   if (game && socketReady) {
     const exitGame = () => {
-      socketRef.current?.emit("game-close", { gameId: game.id });
+      // Abandon : la partie s'arrête pour TOUT LE MONDE
+      socketRef.current?.emit("game-abandon", { gameId: game.id });
       setGame(null);
     };
     if (game.type === "infiltrated") {
@@ -212,6 +239,9 @@ function GamesPage() {
     }
     if (game.type === "mot_intrus_multi") {
       return <MotIntrusSession key={game.id} game={game} socketRef={socketRef} me={user?.id || ""} nameOf={nameOf} exitGame={exitGame} />;
+    }
+    if (game.type === "quiz") {
+      return <QuizSession key={game.id} game={game} socketRef={socketRef} me={user?.id || ""} nameOf={nameOf} exitGame={exitGame} />;
     }
     return <BuzzerSession key={game.id} game={game} socketRef={socketRef} me={user?.id || ""} nameOf={nameOf} exitGame={exitGame} />;
   }
@@ -225,7 +255,17 @@ function GamesPage() {
   return (
     <ProtectedRoute>
       <div className="grain flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div className="px-4 sm:px-6 lg:px-8 pt-14 pb-24 overflow-y-auto flex-1">
+        {abandonNotice && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] bg-[#111] border border-red-500/40 rounded-2xl px-4 py-3 flex items-center gap-3 max-w-[92vw]">
+            <Info className="h-4 w-4 text-red-400 shrink-0" />
+            <p className="text-xs">
+              {abandonNotice === "un joueur" ? "Un joueur a abandonné" : `${nameOf(abandonNotice)} a abandonné la partie`} — la partie est annulée.
+            </p>
+            <button onClick={() => setAbandonNotice(null)} className="p-1 rounded-lg hover:bg-white/10 shrink-0"><X className="h-3.5 w-3.5" /></button>
+          </div>
+        )}
+        <div className="px-3 sm:px-6 lg:px-8 pt-14 pb-24 overflow-y-auto overflow-x-hidden flex-1">
+          <div className="max-w-3xl mx-auto w-full">
           {/* En-tête */}
           <div className="flex items-center gap-3 mb-6">
             <button onClick={() => navigate({ to: "/chat" })} className="p-2 rounded-xl hover:bg-white/10 transition-colors">
@@ -240,7 +280,7 @@ function GamesPage() {
           {/* Choix du jeu */}
           <div className="mb-6">
             <h2 className="text-sm font-semibold mb-3">Choisis un jeu</h2>
-            <div className="grid sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {GAME_MODES.map((mode) => {
                 const IconComp = mode.icon;
                 const isSelected = selectedGameMode === mode.id;
@@ -290,7 +330,7 @@ function GamesPage() {
                 Joueurs ({selectedPlayers.length + 1}/{selectedMode.maxPlayers})
               </h2>
               <div className="flex flex-wrap gap-2">
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/20 border border-primary/40">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/20 border border-primary/40 min-w-0">
                   <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
                     <span className="text-[10px] font-bold text-primary-foreground">
                       {user?.firstName?.[0]}{user?.lastName?.[0]}
@@ -302,9 +342,9 @@ function GamesPage() {
                   const contact = contacts.find((c) => c.user._id === pId);
                   if (!contact) return null;
                   return (
-                    <div key={pId} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
+                    <div key={pId} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 min-w-0 max-w-full">
                       <PlayerAvatar contact={contact} size={24} online />
-                      <span className="text-xs font-medium">{contact.user.firstName}</span>
+                      <span className="text-xs font-medium truncate">{contact.user.firstName}</span>
                       <button onClick={() => togglePlayer(pId)} className="p-0.5 rounded hover:bg-white/10 transition-colors">
                         <X className="h-3 w-3 text-muted-foreground" />
                       </button>
@@ -393,6 +433,7 @@ function GamesPage() {
               </button>
             </div>
           )}
+          </div>
         </div>
 
         {/* Panneau des règles — obligatoire avant de lancer */}
@@ -476,18 +517,29 @@ function SessionShell({ title, subtitle, onExit, children, headerExtra }: {
   title: ReactNode; subtitle: ReactNode;
   onExit: () => void; children: ReactNode; headerExtra?: ReactNode;
 }) {
+  const abandon = () => {
+    if (window.confirm("Abandonner la partie pour tout le monde ?")) onExit();
+  };
   return (
     <ProtectedRoute>
       <div className="grain flex-1 min-h-0 flex flex-col overflow-hidden bg-background">
-        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-b border-white/10 px-4 py-3 flex items-center gap-3">
-          <button onClick={onExit} className="p-2 rounded-xl hover:bg-white/10 transition-colors"><ArrowLeft className="h-5 w-5" /></button>
+        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-b border-white/10 px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
+          <button onClick={abandon} title="Abandonner la partie" className="p-2 rounded-xl hover:bg-white/10 transition-colors shrink-0"><ArrowLeft className="h-5 w-5" /></button>
           <div className="flex-1 min-w-0">
             <h1 className="font-bold text-sm truncate">{title}</h1>
             <p className="text-[10px] text-muted-foreground truncate">{subtitle}</p>
           </div>
           {headerExtra}
+          <button
+            onClick={abandon}
+            className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-[11px] font-semibold hover:bg-red-500/25 transition-colors"
+          >
+            <DoorOpen className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Abandonner</span>
+          </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 py-4">
+          <div className="w-full max-w-3xl mx-auto">{children}</div>
+        </div>
       </div>
     </ProtectedRoute>
   );
@@ -516,6 +568,7 @@ function WaitingLobby({ game, me, nameOf, minLabel, onStart, onlineUsers }: {
 }) {
   const isCreator = game.createdBy === me;
   const mode = GAME_MODES.find((m) =>
+    (game.type === "quiz" && m.id === "quiz") ||
     (game.type === "buzzer_quiz" && m.id === "buzzer_quiz") ||
     (game.type === "infiltrated" && m.id === "infiltrated") ||
     (game.type === "mot_intrus_multi" && m.id === "mot_intrus_multi")
@@ -554,7 +607,7 @@ function WaitingLobby({ game, me, nameOf, minLabel, onStart, onlineUsers }: {
   );
 }
 
-function ScoreStrip({ game, players, nameOf }: { game: BuzzerGame | MotIntrusGame; players: string[]; nameOf: (id: string) => string }) {
+function ScoreStrip({ game, players, nameOf }: { game: BuzzerGame | MotIntrusGame | QuizGame; players: string[]; nameOf: (id: string) => string }) {
   const scores = game.scores || {};
   return (
     <div className="shrink-0 px-4 py-3 border-b border-white/10">
@@ -578,7 +631,7 @@ function ScoreStrip({ game, players, nameOf }: { game: BuzzerGame | MotIntrusGam
 }
 
 function FinishedScreen({ game, players, nameOf, onRematch, onExit, statLabel }: {
-  game: BuzzerGame | MotIntrusGame; players: string[]; nameOf: (id: string) => string;
+  game: BuzzerGame | MotIntrusGame | QuizGame; players: string[]; nameOf: (id: string) => string;
   onRematch: () => void; onExit: () => void; statLabel: string;
 }) {
   return (
@@ -1119,6 +1172,140 @@ function MotIntrusSession({ game, socketRef, me, nameOf, exitGame }: {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════
+// SESSION — QUIZ CULTURE (mêmes questions pour tous, chacun son rythme)
+// ═══════════════════════════════════════════════════════════════
+function QuizSession({ game, socketRef, me, nameOf, exitGame }: {
+  game: QuizGame; socketRef: RefObject<Socket | null>; me: string;
+  nameOf: (id: string) => string; exitGame: () => void;
+}) {
+  const now = useNow();
+  const total = game.questions?.length || 20;
+  const progress = game.progress || 0;
+  const qIndex = game.order?.[progress];
+  const question = qIndex !== undefined ? game.questions?.[qIndex] : undefined;
+  const secondsLeft = game.deadline ? Math.max(0, Math.ceil((game.deadline - now) / 1000)) : null;
+
+  const difficultyLabel = (d: string) => ({ facile: "Facile", moyen: "Moyen", difficile: "Difficile", tres_difficile: "Très difficile", expert: "Expert" } as any)[d] || d;
+  const difficultyStyle = (d: string) => ({ facile: "text-green-400 bg-green-500/20", moyen: "text-yellow-400 bg-yellow-500/20", difficile: "text-orange-400 bg-orange-500/20", tres_difficile: "text-red-400 bg-red-500/20", expert: "text-pink-400 bg-pink-500/20" } as any)[d] || "text-gray-400 bg-gray-500/20";
+
+  const answer = (i: number) => socketRef.current?.emit("game-move", { gameId: game.id, move: "answer", answerIndex: i });
+  const next = () => socketRef.current?.emit("game-move", { gameId: game.id, move: "next" });
+
+  return (
+    <SessionShell
+      title={<span className="inline-flex items-center gap-1.5"><Brain className="h-4 w-4 text-primary" /> Quiz Culture</span>}
+      subtitle={
+        game.state === "waiting" ? "Salon en attente" :
+        game.quizStatus !== "ready" ? "Préparation des questions…" :
+        game.pstate === "done" ? "Tu as terminé !" :
+        `Question ${Math.min(progress + 1, total)} / ${total}`
+      }
+      onExit={exitGame}
+      headerExtra={game.quizStatus !== "ready" && game.state === "playing" ? (
+        <div className="flex items-center gap-2 text-xs text-primary shrink-0"><Loader2 className="h-4 w-4 animate-spin" /> <span className="hidden sm:inline">Génération…</span></div>
+      ) : undefined}
+    >
+      {game.state !== "waiting" && <ScoreStrip game={game} players={game.players} nameOf={nameOf} />}
+      <div className="pt-4">
+        {game.state === "waiting" && (
+          <WaitingLobby
+            game={game} me={me} nameOf={nameOf}
+            minLabel="Il faut au moins 2 joueurs pour lancer."
+            onStart={() => socketRef.current?.emit("quiz-start", { gameId: game.id })}
+            onlineUsers={new Set()}
+          />
+        )}
+
+        {game.state === "playing" && game.quizStatus !== "ready" && (
+          <div className="text-center py-10">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
+            <p className="text-sm text-muted-foreground">Préparation des questions…</p>
+            <p className="text-[10px] text-muted-foreground mt-1">La partie démarre automatiquement</p>
+          </div>
+        )}
+
+        {game.state === "playing" && game.quizStatus === "ready" && (
+          <div className="max-w-xl mx-auto">
+            {/* Progression de tous les joueurs */}
+            <div className="mb-4 space-y-1">
+              {game.players.map((pId) => {
+                const isMe = pId === me;
+                const opp = game.opponents?.find((o) => o.id === pId);
+                const pr = isMe ? progress : (opp?.progress ?? 0);
+                const pct = total ? Math.round((pr / total) * 100) : 0;
+                return (
+                  <div key={pId} className="flex items-center gap-2">
+                    <span className={`text-[11px] w-20 sm:w-24 truncate ${isMe ? "font-semibold" : "text-muted-foreground"}`}>{isMe ? "Toi" : nameOf(pId)}</span>
+                    <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground w-10 text-right shrink-0">{pr}/{total}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {game.pstate === "question" && question && (
+              <>
+                <Countdown seconds={secondsLeft} total={20} icon={Clock} />
+                <div className="flex justify-center mb-2">
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${difficultyStyle(question.difficulty)}`}>
+                    {difficultyLabel(question.difficulty)} · +{question.points} pts
+                  </span>
+                </div>
+                <div className="bg-white/5 rounded-2xl p-4 mb-4 border border-white/10">
+                  <p className="text-center text-base sm:text-lg font-medium leading-relaxed break-words">{question.question}</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                  {question.answers.map((a, i) => (
+                    <button key={i} onClick={() => answer(i)}
+                      className="p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-primary/20 hover:border-primary/40 transition-all text-left text-sm break-words">
+                      <span className="text-xs font-bold text-primary mr-2">{String.fromCharCode(65 + i)}.</span>{a}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {game.pstate === "feedback" && game.lastResult && (
+              <div className={`p-4 rounded-2xl border text-center ${game.lastResult.correct ? "bg-green-500/10 border-green-500/30" : "bg-red-500/10 border-red-500/30"}`}>
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  {game.lastResult.correct ? <Check className="h-5 w-5 text-green-400" /> : <X className="h-5 w-5 text-red-400" />}
+                  <span className="font-medium text-sm">
+                    {game.lastResult.correct ? `Bonne réponse ! +${game.lastResult.points} pts` : game.lastResult.timedOut ? "Temps écoulé" : "Mauvaise réponse"}
+                  </span>
+                </div>
+                {!game.lastResult.correct && question && (
+                  <p className="text-xs text-muted-foreground break-words">Bonne réponse : {question.answers[game.lastResult.correctIndex] ?? "?"}</p>
+                )}
+                <button onClick={next} className="mt-3 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">Question suivante</button>
+              </div>
+            )}
+
+            {game.pstate === "done" && (
+              <div className="text-center py-10">
+                <Trophy className="h-10 w-10 mx-auto mb-3 text-yellow-400" />
+                <p className="font-semibold">Tu as terminé tes {total} questions !</p>
+                <p className="text-xs text-muted-foreground mt-1">En attente des autres joueurs…</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {game.state === "finished" && (
+          <FinishedScreen
+            game={game} players={game.players} nameOf={nameOf}
+            onRematch={() => socketRef.current?.emit("game-rematch", { gameId: game.id })}
+            onExit={exitGame}
+            statLabel="points"
+          />
+        )}
+      </div>
+    </SessionShell>
+  );
+}
+
 // ── Catalogue des modes multijoueur ────────────────────────────
 const GAME_MODES: GameMode[] = [
   {
@@ -1127,9 +1314,9 @@ const GAME_MODES: GameMode[] = [
     minPlayers: 4, maxPlayers: 12, category: "Social",
   },
   {
-    id: "buzzer_quiz", name: "Quiz Buzzer", icon: Zap,
-    description: "Le plus rapide à buzzer répond et marque",
-    minPlayers: 2, maxPlayers: 5, category: "Culture",
+    id: "quiz", name: "Quiz Culture", icon: Brain,
+    description: "Les mêmes questions pour tous, chacun à son rythme",
+    minPlayers: 2, maxPlayers: 8, category: "Culture",
   },
   {
     id: "mot_intrus_multi", name: "Mot Intrus", icon: Puzzle,
@@ -1156,16 +1343,18 @@ const GAME_RULES: Record<string, { rules: string[]; tips: string[] }> = {
       "Si tu es Détective, garde ta découverte pour le bon moment.",
     ],
   },
-  buzzer_quiz: {
+  quiz: {
     rules: [
-      "2 à 5 joueurs. Une question de culture générale (en français) est posée à tous.",
-      "Le premier à buzzer obtient le droit de répondre (10 s).",
-      "Bonne réponse : tu marques les points de la question. Mauvaise réponse ou silence : personne ne marque.",
-      "20 questions, de facile à très difficile. Le meilleur score gagne.",
+      "2 à 8 joueurs. Tout le monde reçoit EXACTEMENT les mêmes questions, mais dans un ordre différent pour chacun.",
+      "Chacun joue à son rythme : aucune course, ta connexion ne te désavantage pas.",
+      "4 réponses possibles par question, 20 secondes pour répondre.",
+      "Points : Facile +100, Moyen +200, Difficile +300, Très difficile +500.",
+      "20 questions au total, de facile à très difficile. Le meilleur score gagne.",
+      "Tu peux abandonner à tout moment : la partie s'arrête alors pour tout le monde.",
     ],
     tips: [
-      "Buzz vite, mais seulement si tu connais la réponse !",
-      "Les questions difficiles valent plus de points.",
+      "Prends ton temps : répondre juste rapporte plus qu'aller vite.",
+      "Les questions difficiles valent beaucoup plus de points.",
     ],
   },
   mot_intrus_multi: {

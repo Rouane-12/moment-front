@@ -56,9 +56,19 @@ export interface GameState {
   level?: { len: number; points: number; label: string } | null;
   sequence?: string[];
   input?: string[];
-  // Action ou Vérité
+  // Action ou Vérité (flux joueur : choix → rédaction → réponse)
   avStatus?: "generating" | "ready";
   isMyTurn?: boolean;
+  asker?: string | null;
+  answerer?: string | null;
+  amAsker?: boolean;
+  amAnswerer?: boolean;
+  choice?: "verite" | "action" | null;
+  prompt?: string | null;
+  answer?: string | null;
+  actionDone?: boolean | null;
+  veritePoints?: number;
+  actionPoints?: number;
   currentCard?: { kind: "verite" | "action"; text: string } | null;
   verdict?: { by: string; accepted: boolean } | null;
   skipsLeft?: number;
@@ -70,6 +80,35 @@ export interface GameState {
   filledCount?: number;
   guessedCount?: number;
   settingIndex?: number;
+  settingPlayer?: string | null;
+  guessingPlayer?: string | null;
+  compatibility?: number;
+  compatibilityMessage?: string | null;
+  // Code Secret (nouveau protocole)
+  round?: number;
+  myRole?: "creator" | "guesser" | "spectator";
+  colors?: string[];
+  codeLength?: number;
+  maxAttempts?: number;
+  myCode?: string[];
+  results?: Record<string, { solved: boolean; attempts: number }>;
+  attemptsBy?: Record<string, Array<{ guess: string[]; result: Array<{ color: string; status: string }> }>>;
+  // Quiz multijoueur
+  opponents?: Array<{ id: string; progress: number; score: number }>;
+  // Champs utilisés par les jeux historiques
+  currentPlayer?: string;
+  currentQuestion?: any;
+  attempts?: Array<{ guess: string[]; result: Array<{ color: string; status: string }> }>;
+  codeCreator?: string;
+  currentGuesser?: string;
+  thinker?: string;
+  guesser?: string;
+  secretItem?: string;
+  lastAnswer?: any;
+  questionCount?: number;
+  maxQuestions?: number;
+  statements?: Record<string, string[]>;
+  category?: any; // catégorie de jeu (objet pour les jeux historiques)
   // Deux Vérités, Un Mensonge (envoyé par le backend au rédacteur)
   currentStatements?: string[];
   correctCount?: Record<string, number>;
@@ -161,13 +200,13 @@ const GAME_RULES: Record<GameType, { title: string; rules: string[]; tips: strin
   code_secret: {
     title: "Le Code Secret",
     rules: [
-      "Le createur choisit un code de 4 symboles",
-      "L'adversaire doit deviner en 6 tentatives",
-      "Vert = bon symbole, bonne position",
-      "Orange = bon symbole, mauvaise position",
-      "On inverse les roles apres",
+      "Celui qui lance la partie compose un code de 4 couleurs",
+      "L'autre doit deviner ce code en 6 tentatives",
+      "Vert = bonne couleur, bonne position",
+      "Orange = bonne couleur, mauvaise position",
+      "On inverse les roles, puis celui qui a devine en le moins d'essais gagne",
     ],
-    tips: ["Notez les symboles elimines"],
+    tips: ["Eliminez les couleurs une par une a chaque essai"],
   },
   mot_intrus: {
     title: "Le Mot Intrus",
@@ -210,34 +249,33 @@ const GAME_RULES: Record<GameType, { title: string; rules: string[]; tips: strin
     tips: ["Soyez honnete dans vos reponses !"],
   },
   deux_verites: {
-    title: "Deux Verites, Un Mensonge",
+    title: "Une Verite, Deux Mensonges",
     rules: [
-      "Ecrivez 3 affirmations (2 vraies, 1 fausse)",
-      "L'autre doit trouver le mensonge",
+      "Ecrivez 3 affirmations : 1 seule est VRAIE, 2 sont fausses",
+      "L'autre doit trouver l'unique verite",
       "On inverse les roles",
-      "Celui qui trouve le plus gagne",
+      "Celui qui trouve le plus de verites gagne",
     ],
-    tips: ["Rendez le mensonge credible !"],
+    tips: ["Rendez les mensonges credibles pour brouiller les pistes !"],
   },
   action_verite: {
     title: "Action ou Verite",
     rules: [
-      "A votre tour, choisissez Action ou Verite",
-      "Action = accomplir un defi",
-      "Verite = repondre a une question",
-      "L'autre valide si c'est fait",
-      "Points pour chaque reussite",
+      "A chaque tour, un joueur choisit : Action ou Verite",
+      "L'autre ecrit alors la question (Verite) ou le defi (Action)",
+      "Verite : tu ecris ta reponse, qui repart chez l'autre",
+      "Action : tu declares « je l'ai faite » ou « je refuse »",
+      "Verite repondue +100 pts, Action faite +200 pts",
+      "Les questions sont ecrites par vous, jamais predefinies",
     ],
-    tips: ["Les actions donnent plus de points !"],
+    tips: ["Posez des questions personnelles, c'est plus drole !"],
   },
 };
 
 export function GameMenu({ onSelect, onClose }: { onSelect: (type: GameType) => void; onClose: () => void }) {
   const [selectedType, setSelectedType] = useState<GameType | null>(null);
   const games: { type: GameType; icon: string; name: string; desc: string; category: string }[] = [
-    // Jeux de reflexes
-    { type: "reflex", icon: "Zap", name: "Le Reflexe", desc: "Le plus rapide gagne", category: "Reflexes" },
-    { type: "dice", icon: "Dice1", name: "Duel de Des", desc: "Meilleur score en 3 manches", category: "Reflexes" },
+    // Jeux de reflexes / hasard
     { type: "rps", icon: "Hand", name: "Pierre-Feuille-Ciseaux", desc: "Le classique", category: "Reflexes" },
     // Jeux de logique
     { type: "tictactoe", icon: "Grid3X3", name: "Morpion", desc: "Aligne 3 symboles", category: "Logique" },
@@ -248,8 +286,8 @@ export function GameMenu({ onSelect, onClose }: { onSelect: (type: GameType) => 
     // Jeux sociaux
     { type: "devine_ce_que_je_pense", icon: "Lightbulb", name: "Devine ce que je pense", desc: "Questions Oui/Non pour deviner", category: "Social" },
     { type: "a_quel_point", icon: "Heart", name: "A quel point tu me connais ?", desc: "Test de compatibilite", category: "Social" },
-    { type: "deux_verites", icon: "Mask", name: "Deux Verites, Un Mensonge", desc: "Trouvez le mensonge", category: "Bluff" },
-    { type: "action_verite", icon: "Drama", name: "Action ou Verite", desc: "Cartes generees par l'IA", category: "Social" },
+    { type: "deux_verites", icon: "Mask", name: "Une Verite, Deux Mensonges", desc: "Trouvez l'unique verite", category: "Bluff" },
+    { type: "action_verite", icon: "Drama", name: "Action ou Verite", desc: "Questions ecrites par vous", category: "Social" },
   ];
 
   const categories = [...new Set(games.map(g => g.category))];
@@ -345,7 +383,7 @@ const GAME_NAMES: Record<GameType, string> = {
   mot_intrus: "Le Mot Intrus",
   devine_ce_que_je_pense: "Devine ce que je pense",
   a_quel_point: "A quel point tu me connais ?",
-  deux_verites: "Deux Verites, Un Mensonge",
+  deux_verites: "Une Verite, Deux Mensonges",
   memoire_flash: "Memoire Flash",
   action_verite: "Action ou Verite",
 };
@@ -1089,6 +1127,12 @@ function GenericGameWrapper({
            win === currentUserId ? "Tu gagnes !" :
            <><PlayerName id={win || ""} players={players} /> gagne !</>}
         </p>
+        {game.type === "a_quel_point" && game.compatibility !== undefined && (
+          <div className="mb-4">
+            <p className="text-3xl font-black text-primary">{game.compatibility}%</p>
+            <p className="text-[11px] text-muted-foreground px-2">{game.compatibilityMessage || "de compatibilite"}</p>
+          </div>
+        )}
         <button onClick={onRematch} className="px-5 py-2 rounded-full bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-colors">
           Revanche
         </button>
@@ -1103,13 +1147,13 @@ function GenericGameWrapper({
       </button>
       <p className="text-sm font-bold mb-2">{title}</p>
       <div className="flex justify-around mb-3">
-        <div className={game.scores[p1] > game.scores[p2] ? "text-primary" : ""}>
+        <div className={(game.scores[p1] ?? 0) > (game.scores[p2] ?? 0) ? "text-primary" : ""}>
           <p className="text-[11px] text-muted-foreground"><PlayerName id={p1} players={players} /></p>
-          <p className="text-xl font-bold">{game.scores[p1]}</p>
+          <p className="text-xl font-bold">{game.scores[p1] ?? 0}</p>
         </div>
-        <div className={game.scores[p2] > game.scores[p1] ? "text-primary" : ""}>
+        <div className={(game.scores[p2] ?? 0) > (game.scores[p1] ?? 0) ? "text-primary" : ""}>
           <p className="text-[11px] text-muted-foreground"><PlayerName id={p2} players={players} /></p>
-          <p className="text-xl font-bold">{game.scores[p2]}</p>
+          <p className="text-xl font-bold">{game.scores[p2] ?? 0}</p>
         </div>
       </div>
       {children}
@@ -1120,7 +1164,12 @@ function GenericGameWrapper({
 // ══════════════════════════════════════
 // CODE SECRET GAME
 // ══════════════════════════════════════
-const CS_SYMBOLS = ["🔴", "🟢", "🔵", "🟡", "🟣", "🟠"];
+const CODE_LENGTH = 4;
+const CS_SYMBOLS = ["red", "green", "blue", "yellow", "purple", "orange"];
+const COLOR_CLASSES: Record<string, string> = {
+  red: "bg-red-500", green: "bg-green-500", blue: "bg-blue-500",
+  yellow: "bg-yellow-400", purple: "bg-purple-500", orange: "bg-orange-500",
+};
 
 function CodeSecretGame({
   game, currentUserId, players, onMove, onRematch, onClose,
@@ -1129,174 +1178,164 @@ function CodeSecretGame({
   onMove: (data: any) => void; onRematch: () => void; onClose: () => void;
 }) {
   const [currentGuess, setCurrentGuess] = useState<string[]>([]);
-  const [currentCode, setCurrentCode] = useState<string[]>([]);
-  const isCreator = game.codeCreator === currentUserId;
-  const isGuesser = game.currentGuesser === currentUserId;
+  const isCreator = game.myRole ? game.myRole === "creator" : game.codeCreator === currentUserId;
+  const isGuesser = game.myRole ? game.myRole === "guesser" : game.currentGuesser === currentUserId;
   const isMyTurn = isGuesser && game.phase === 'guessing';
-  
-  const addSymbol = (symbol: string) => {
-    if (currentGuess.length >= CODE_LENGTH) return;
-    setCurrentGuess([...currentGuess, symbol]);
+  const codeLength = game.codeLength ?? CODE_LENGTH;
+  const maxAttempts = game.maxAttempts ?? 6;
+  const myCode = game.myCode ?? [];
+  const colors = (game.colors && game.colors.length ? game.colors : CS_SYMBOLS);
+
+  // On vide la proposition en cours dès qu'on change de phase ou de manche
+  useEffect(() => { setCurrentGuess([]); }, [game.phase, game.round]);
+
+  const addSymbol = (color: string) => {
+    if (currentGuess.length >= codeLength) return;
+    setCurrentGuess((prev) => [...prev, color]);
   };
-  
-  const removeLast = () => {
-    setCurrentGuess(currentGuess.slice(0, -1));
-  };
-  
+
+  const removeLast = () => setCurrentGuess((prev) => prev.slice(0, -1));
+
   const submitGuess = () => {
-    if (currentGuess.length !== CODE_LENGTH) return;
+    if (currentGuess.length !== codeLength) return;
     onMove({ gameId: game.id, move: "guess", guess: currentGuess });
     setCurrentGuess([]);
   };
-  
-  const addCodeSymbol = (symbol: string) => {
-    if (currentCode.length >= CODE_LENGTH) return;
-    onMove({ gameId: game.id, move: "set_code", symbol });
-    setCurrentCode(prev => [...prev, symbol]);
-  };
-  
-  const removeCodeSymbol = () => {
-    if (currentCode.length === 0) return;
-    const newCode = currentCode.slice(0, -1);
-    setCurrentCode(newCode);
-    onMove({ gameId: game.id, move: "set_code", symbol: newCode[newCode.length - 1] || '' });
+
+  const addCodeSymbol = (color: string) => {
+    if (myCode.length >= codeLength) return;
+    onMove({ gameId: game.id, move: "set_code", symbol: color, action: "add" });
   };
 
-  const getColorClass = (symbol?: string) => {
-    switch (symbol) {
-      case '🔴': return 'bg-red-500';
-      case '🟢': return 'bg-green-500';
-      case '🟣': return 'bg-purple-500';
-      case '🟡': return 'bg-yellow-400';
-      case '🔵': return 'bg-blue-500';
-      case '🟠': return 'bg-orange-500';
-      default: return 'bg-white/10';
-    }
+  const getColorClass = (color?: string) => COLOR_CLASSES[color || ""] || "bg-white/10";
+
+  const renderPeg = (color: string, status: string | undefined, key: number | string) => {
+    const ring = status === "correct" ? "ring-2 ring-green-400" : status === "wrong_position" ? "ring-2 ring-orange-400" : "";
+    return <span key={key} className={`w-9 h-9 rounded-lg ${getColorClass(color)} ${ring} border border-white/20`} />;
   };
 
   return (
     <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Le Code Secret">
+      <p className="text-[10px] text-muted-foreground text-center mb-2">
+        Manche {game.round || 1}/2 · {isCreator ? "Tu composes le code" : "Tu devines le code"}
+      </p>
       {/* ═══ CREATOR: choose the code ═══ */}
-      {(game.phase === 'setting_code' || game.phase === 'setting_code') && isCreator && (
+      {game.phase === 'setting_code' && isCreator && (
         <div>
           <p className="text-[11px] text-primary font-semibold mb-2">
-            Choisis ton code secret ({currentCode.length}/{CODE_LENGTH})
+            Choisis ton code secret ({myCode.length}/{codeLength})
           </p>
           <p className="text-[10px] text-muted-foreground mb-3">
-            {currentCode.length < CODE_LENGTH ? "Ajoute les symboles un par un :" : "Le code est prêt. L'adversaire va deviner..."}
+            {myCode.length < codeLength
+              ? "Compose ton code couleur par couleur, puis l'autre devra le deviner."
+              : "Code verrouille. L'adversaire va deviner..."}
           </p>
-          {/* Show current code being built */}
+          {/* Le code en construction */}
           <div className="flex justify-center gap-2 mb-3">
-            {currentCode.map((s, i) => (
-              <span key={i} className={`w-10 h-10 rounded-lg ${getColorClass(s)} flex items-center justify-center text-sm`}>
-                {s}
-              </span>
-            ))}
-            {Array.from({ length: CODE_LENGTH - currentCode.length }).map((_, i) => (
-              <span key={`empty-${i}`} className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center text-muted-foreground text-xs">?</span>
+            {myCode.map((c, i) => renderPeg(c, undefined, i))}
+            {Array.from({ length: codeLength - myCode.length }).map((_, i) => (
+              <span key={`empty-${i}`} className="w-9 h-9 rounded-lg bg-white/5 border border-dashed border-white/15" />
             ))}
           </div>
-          <div className="flex justify-center gap-2 mb-3">
-            {CS_SYMBOLS.map(s => (
-              <button key={s} onClick={() => addCodeSymbol(s)} disabled={currentCode.length >= CODE_LENGTH}
-                className="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-lg transition-colors disabled:opacity-40">
-                {s}
-              </button>
+          <div className="flex justify-center gap-2 mb-3 flex-wrap">
+            {colors.map((c) => (
+              <button key={c} onClick={() => addCodeSymbol(c)} disabled={myCode.length >= codeLength}
+                className={`w-10 h-10 rounded-lg ${getColorClass(c)} border border-white/20 transition-transform hover:scale-105 disabled:opacity-40`}
+                aria-label={c} />
             ))}
           </div>
-          {currentCode.length > 0 && (
+          {myCode.length > 0 && (
             <div className="flex justify-center gap-2">
-              <button onClick={() => {
-                const newCode = currentCode.slice(0, -1);
-                setCurrentCode(newCode);
-                if (newCode.length > 0) {
-                  onMove({ gameId: game.id, move: "set_code", symbol: newCode[newCode.length - 1] });
-                } else {
-                  setCurrentCode([]);
-                }
-              }} className="px-4 py-2 rounded-lg bg-white/10 text-sm">
-                Retour
-              </button>
+              <button onClick={() => onMove({ gameId: game.id, move: "set_code", action: "remove" })}
+                className="px-4 py-2 rounded-lg bg-white/10 text-sm">Retour</button>
+              <button onClick={() => onMove({ gameId: game.id, move: "set_code", action: "reset" })}
+                className="px-4 py-2 rounded-lg bg-white/10 text-sm">Effacer</button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ═══ CREATOR attend pendant la devinette ═══ */}
+      {game.phase === 'guessing' && isCreator && (
+        <div className="text-center py-3">
+          <p className="text-sm text-muted-foreground">
+            Tu as defini le code. <PlayerName id={game.currentGuesser || ''} players={players} /> essaie de le deviner.
+          </p>
         </div>
       )}
 
       {/* ═══ GUESSER: try to break the code ═══ */}
       {isGuesser && game.phase === 'guessing' && (
         <div>
+          <p className="text-[11px] text-muted-foreground text-center mb-2">
+            Tentative {(game.attempts?.length || 0) + 1}/{maxAttempts}
+          </p>
           <div className="flex justify-center gap-2 mb-3">
-            {currentGuess.map((s, i) => (
-              <span key={i} className={`w-10 h-10 rounded-lg ${getColorClass(s)} flex items-center justify-center text-sm`}>
-                {s}
-              </span>
-            ))}
-            {Array.from({ length: CODE_LENGTH - currentGuess.length }).map((_, i) => (
-              <span key={`empty-${i}`} className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center text-muted-foreground text-xs">?</span>
+            {currentGuess.map((c, i) => renderPeg(c, undefined, i))}
+            {Array.from({ length: codeLength - currentGuess.length }).map((_, i) => (
+              <span key={`empty-${i}`} className="w-9 h-9 rounded-lg bg-white/5 border border-dashed border-white/15" />
             ))}
           </div>
-          <div className="flex justify-center gap-2 mb-3">
-            {CS_SYMBOLS.map(s => (
-              <button key={s} onClick={() => addSymbol(s)} className="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-lg transition-colors">{s}</button>
+          <div className="flex justify-center gap-2 mb-3 flex-wrap">
+            {colors.map((c) => (
+              <button key={c} onClick={() => addSymbol(c)} aria-label={c}
+                className={`w-10 h-10 rounded-lg ${getColorClass(c)} border border-white/20 transition-transform hover:scale-105`} />
             ))}
           </div>
           <div className="flex justify-center gap-2 mb-1">
             <button onClick={removeLast} className="px-4 py-2 rounded-lg bg-white/10 text-sm">Retour</button>
-            <button onClick={submitGuess} disabled={currentGuess.length !== CODE_LENGTH}
+            <button onClick={submitGuess} disabled={currentGuess.length !== codeLength}
               className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-bold disabled:opacity-40">
               Valider
             </button>
+          </div>
+          <div className="flex justify-center gap-4 mt-3 text-[10px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded bg-white/20 ring-2 ring-green-400 inline-block" /> bonne position</span>
+            <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded bg-white/20 ring-2 ring-orange-400 inline-block" /> mauvaise position</span>
           </div>
         </div>
       )}
 
       {/* ═══ PREVIOUS ATTEMPTS */}
       {game.attempts && game.attempts.length > 0 && (
-        <div className="mb-4 space-y-1">
+        <div className="mb-3 mt-3 space-y-1">
           {game.attempts.map((attempt: any, i: number) => (
-            <div key={i} className="flex items-center gap-2 text-sm mb-2">
+            <div key={i} className="flex items-center gap-2 mb-2">
               <span className="text-[10px] text-muted-foreground w-4">{i + 1}.</span>
               <div className="flex gap-1">
-                {attempt.guess.map((s: string, j: number) => {
-                  const result = attempt.result?.[j];
-                  const bgColor = result?.status === 'correct' ? 'bg-green-500/30' :
-                                  result?.status === 'wrong_position' ? 'bg-orange-500/30' : 'bg-white/10';
-                  return <span key={j} className={`w-8 h-8 rounded ${bgColor} flex items-center justify-center text-xs`}>{s}</span>;
-                })}
+                {attempt.guess.map((c: string, j: number) => renderPeg(c, attempt.result?.[j]?.status, j))}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* ═══ LAST RESULT FEEDBACK */}
+      {/* ═══ DERNIER RESULTAT */}
       {game.lastResult && (
         <div className={`p-3 rounded-xl mb-2 ${game.lastResult.correct ? 'bg-green-500/10 border border-green-500/30' : 'bg-white/5 border border-white/10'}`}>
           {game.lastResult.correct ? (
-            <p className="text-sm font-semibold text-green-500">Code retrouve !</p>
+            <p className="text-sm font-semibold text-green-400">Code trouve !</p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              {game.lastResult.result.filter(r => r.status === 'correct').length} bien places, 
-              {game.lastResult.result.filter(r => r.status === 'wrong_position').length} bons symboles a decplacer
+              {game.lastResult.result.filter((r: any) => r.status === 'correct').length} bien place(s),{" "}
+              {game.lastResult.result.filter((r: any) => r.status === 'wrong_position').length} mal place(s)
             </p>
           )}
         </div>
       )}
 
-      {/* ═══ WAITING */}
+      {/* ═══ EN ATTENTE */}
       {!isCreator && game.phase === 'setting_code' && (
         <div className="text-center py-6">
           <p className="text-sm text-muted-foreground">
-            En attente que <PlayerName id={game.codeCreator || ''} players={players} /> definit le code...
+            En attente que <PlayerName id={game.codeCreator || ''} players={players} /> compose son code...
           </p>
         </div>
       )}
 
-      {!isMyTurn && game.phase === 'guessing' && (
+      {!isCreator && !isGuesser && (
         <div className="text-center py-6">
-          <p className="text-sm text-muted-foreground">
-            En attente...
-          </p>
+          <p className="text-sm text-muted-foreground">En attente...</p>
         </div>
       )}
     </GenericGameWrapper>
@@ -1501,12 +1540,17 @@ function AQuelPointGame({
       {/* ═══ EN ATTENTE ═══ */}
       {!canSet && !canGuess && game.state === 'playing' && (
         <div className="text-center py-6">
-          <p className="text-sm text-muted-foreground">
-            {(game.phase === 'setting_p1' || game.phase === 'setting_p2')
-              ? `En attente que ${<PlayerName id={game.settingPlayer || ''} players={players} />} remplisse ses donnees...`
-              : `En attente que ${<PlayerName id={game.guessingPlayer || ''} players={players} />} devine...`
-            }
-          </p>
+          {(game.phase === 'setting_p1' || game.phase === 'setting_p2') ? (
+            <p className="text-sm text-muted-foreground">
+              En attente que <PlayerName id={game.settingPlayer || ''} players={players} /> remplisse ses donnees...
+            </p>
+          ) : (game.phase === 'guessing_p1' || game.phase === 'guessing_p2') ? (
+            <p className="text-sm text-muted-foreground">
+              En attente que <PlayerName id={game.guessingPlayer || ''} players={players} /> devine tes reponses...
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Calcul des resultats…</p>
+          )}
         </div>
       )}
 
@@ -1522,11 +1566,10 @@ function AQuelPointGame({
         </div>
       )}
 
-      {/* ═══ COMPATIBILITE ═══ */}
-      {game.state === 'finished' && game.compatibility !== undefined && (
-        <div className="text-center py-4">
-          <p className="text-3xl font-black text-primary mb-2">{game.compatibility}%</p>
-          <p className="text-xs text-muted-foreground">de compatibilite</p>
+      {/* ═══ COMPATIBILITE (duo, phase de fin gere par le wrapper) ═══ */}
+      {game.state !== 'finished' && game.compatibility !== undefined && game.compatibility > 0 && (
+        <div className="text-center py-3">
+          <p className="text-sm">Compatibilite : <span className="font-bold text-primary">{game.compatibility}%</span></p>
         </div>
       )}
     </GenericGameWrapper>
@@ -1547,10 +1590,10 @@ function DeuxVeritesGame({
   const isWriter = game.currentPlayer === currentUserId;
 
   // Les affirmations de l'autre joueur (pendant guessing)
-  const otherStatements = !isWriter && game.statements ? game.statements[game.currentPlayer] : null;
+  const otherStatements = !isWriter && game.statements && game.currentPlayer ? game.statements[game.currentPlayer] : null;
 
   return (
-    <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Deux Verites, Un Mensonge">
+    <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Une Vérité, Deux Mensonges">
       <p className="text-[11px] text-muted-foreground mb-3">Manche {game.currentRound}/{game.maxRounds}</p>
 
       {/* ═══ ECRITURE (le joueur courant remplit) ═══ */}
@@ -1751,68 +1794,102 @@ function ActionVeriteGame({
   game: GameState; currentUserId: string; players: Record<string, GamePlayer>;
   onMove: (data: any) => void; onRematch: () => void; onClose: () => void;
 }) {
-  const card = game.currentCard;
-  const lastResult = game.lastResult;
+  const [promptInput, setPromptInput] = useState("");
+  const [answerInput, setAnswerInput] = useState("");
   const send = (move: string, extra: Record<string, unknown> = {}) =>
     onMove({ gameId: game.id, move, ...extra });
 
-  if (game.avStatus === "generating") {
-    return (
-      <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Action ou Vérité">
-        <div className="py-8 text-center">
-          <LucideIcons.Loader2 className="h-6 w-6 animate-spin mx-auto mb-3 text-primary" />
-          <p className="text-sm">Génération des cartes par l'IA…</p>
-          <p className="text-[10px] text-muted-foreground mt-1">Quelques secondes</p>
-        </div>
-      </GenericGameWrapper>
-    );
-  }
+  useEffect(() => { setPromptInput(""); setAnswerInput(""); }, [game.phase, game.round]);
+
+  const choiceLabel = game.choice === "action" ? "Action" : "Vérité";
+  const asker = <PlayerName id={game.asker || ""} players={players} />;
+  const answerer = <PlayerName id={game.answerer || ""} players={players} />;
 
   return (
     <GenericGameWrapper game={game} currentUserId={currentUserId} players={players} onMove={onMove} onRematch={onRematch} onClose={onClose} title="Action ou Vérité">
-      <p className="text-[11px] text-muted-foreground mb-2">Carte {game.currentRound}/{game.maxRounds}</p>
+      <p className="text-[11px] text-muted-foreground mb-2">Tour {game.currentRound}/{game.maxRounds}</p>
 
-      {card && !game.verdict && (
-        <div className="mb-3">
-          <div className={`p-4 rounded-xl border mb-3 ${card.kind === "action" ? "bg-orange-500/10 border-orange-500/30" : "bg-blue-500/10 border-blue-500/30"}`}>
-            <p className="text-[10px] font-bold uppercase tracking-wide mb-1 flex items-center gap-1 justify-center">
-              {card.kind === "action" ? <LucideIcons.Zap className="h-3 w-3" /> : <LucideIcons.MessageCircle className="h-3 w-3" />}
-              {card.kind === "action" ? "Action" : "Vérité"}
-            </p>
-            <p className="text-sm font-medium">{card.text}</p>
-          </div>
-          {game.isMyTurn ? (
-            <p className="text-[11px] text-primary">À toi de jouer ! L'autre validera ta carte.</p>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-[11px] text-muted-foreground text-center">Tu es le juge de ce tour</p>
+      {/* 1. CHOIX : le joueur questionne choisit Action ou Verite */}
+      {game.phase === "choosing" && (
+        <div>
+          {game.amAnswerer ? (
+            <>
+              <p className="text-sm font-semibold mb-3 text-center">{asker} va te demander… choisis :</p>
               <div className="flex gap-2 justify-center">
-                <button onClick={() => send("verdict", { accepted: true })}
-                  className="px-4 py-2 rounded-xl bg-green-500 text-white text-sm font-bold">Réussie</button>
-                <button onClick={() => send("verdict", { accepted: false })}
-                  className="px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-bold">Refusée</button>
+                <button onClick={() => send("choose", { choice: "verite" })}
+                  className="px-5 py-3 rounded-xl bg-blue-500/20 border border-blue-500/40 text-sm font-bold hover:bg-blue-500/30 transition-colors">Vérité</button>
+                <button onClick={() => send("choose", { choice: "action" })}
+                  className="px-5 py-3 rounded-xl bg-orange-500/20 border border-orange-500/40 text-sm font-bold hover:bg-orange-500/30 transition-colors">Action</button>
               </div>
-              {game.canSkip && (
-                <div className="text-center">
-                  <button onClick={() => send("skip")} className="text-[11px] text-muted-foreground underline">
-                    Demander une autre carte ({game.skipsLeft ?? 0} restants)
-                  </button>
-                </div>
-              )}
-            </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">En attente : {answerer} choisit Vérité ou Action…</p>
           )}
         </div>
       )}
 
-      {!card && game.verdict && lastResult && (
-        <div className={`p-3 rounded-xl mb-2 ${lastResult.accepted ? "bg-green-500/10 border border-green-500/30" : "bg-red-500/10 border border-red-500/30"}`}>
-          <p className="text-sm font-semibold">{lastResult.accepted ? `Carte réussie ! +${lastResult.points} pts` : "Carte refusée…"}</p>
-          <p className="text-[11px] text-muted-foreground mt-1">« {lastResult.text} »</p>
+      {/* 2. REDACTION : l'autre ecrit la question / le defi */}
+      {game.phase === "writing" && (
+        <div>
+          <p className="text-[11px] text-primary font-semibold mb-2 text-center">{answerer} a choisi : {choiceLabel}</p>
+          {game.amAsker ? (
+            <>
+              <p className="text-sm mb-2">{game.choice === "verite" ? "Écris ta question :" : "Écris ton défi :"}</p>
+              <textarea value={promptInput} onChange={(e) => setPromptInput(e.target.value)} maxLength={220} rows={3}
+                placeholder={game.choice === "verite" ? "Ex : Quelle est ta plus grande peur ?" : "Ex : Imite une célébrité pendant 10 secondes…"}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-primary/40 resize-none" />
+              <button onClick={() => send("prompt", { text: promptInput })} disabled={promptInput.trim().length < 3}
+                className="mt-2 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">
+                Envoyer la {choiceLabel.toLowerCase()}
+              </button>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">En attente : {asker} écrit ta {choiceLabel.toLowerCase()}…</p>
+          )}
         </div>
       )}
 
-      {!card && !game.verdict && game.state === "playing" && (
-        <p className="text-[11px] text-muted-foreground">Préparation de la carte suivante…</p>
+      {/* 3. REPONSE */}
+      {game.phase === "answering" && (
+        <div>
+          <div className={`p-3 rounded-xl border mb-3 ${game.choice === "action" ? "bg-orange-500/10 border-orange-500/30" : "bg-blue-500/10 border-blue-500/30"}`}>
+            <p className="text-[10px] font-bold uppercase tracking-wide mb-1 text-center">{choiceLabel}</p>
+            <p className="text-sm font-medium text-center break-words">{game.prompt}</p>
+          </div>
+          {game.amAnswerer ? (
+            game.choice === "verite" ? (
+              <>
+                <textarea value={answerInput} onChange={(e) => setAnswerInput(e.target.value)} maxLength={300} rows={3}
+                  placeholder="Ta réponse… (elle sera envoyée à l'autre)"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-primary/40 resize-none" />
+                <button onClick={() => send("respond", { text: answerInput })} disabled={!answerInput.trim()}
+                  className="mt-2 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">
+                  Envoyer ma réponse
+                </button>
+              </>
+            ) : (
+              <div className="flex gap-2 justify-center">
+                <button onClick={() => send("respond", { done: true })}
+                  className="px-4 py-2.5 rounded-xl bg-green-500/20 border border-green-500/40 text-sm font-bold hover:bg-green-500/30 transition-colors">Je l'ai faite</button>
+                <button onClick={() => send("respond", { done: false })}
+                  className="px-4 py-2.5 rounded-xl bg-red-500/20 border border-red-500/40 text-sm font-bold hover:bg-red-500/30 transition-colors">Je refuse</button>
+              </div>
+            )
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-2">En attente de la réponse de {answerer}…</p>
+          )}
+        </div>
+      )}
+
+      {/* 4. RESULTAT DU TOUR */}
+      {game.phase === "result" && game.lastResult && (
+        <div className="p-3 rounded-xl mb-2 bg-white/5 border border-white/10">
+          <p className="text-sm font-semibold mb-1">
+            {game.lastResult.choice === "verite" ? "Vérité répondue" : (game.lastResult.accepted ? "Action faite" : "Action refusée")} · +{game.lastResult.points} pts
+          </p>
+          <p className="text-[11px] text-muted-foreground">« {game.lastResult.prompt} »</p>
+          <p className="text-[11px] text-muted-foreground mt-1">Réponse : {game.lastResult.answer}</p>
+        </div>
       )}
     </GenericGameWrapper>
   );
