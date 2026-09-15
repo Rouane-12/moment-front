@@ -588,7 +588,7 @@ function ChatPage() {
   };
 
   // === MINI-GAMES ===
-  const handleGameSelect = (type: GameType) => {
+  const handleGameSelect = (type: GameType, quizLevel?: string | null) => {
     if (!selectedConv || !socketRef.current) return;
     // Populate player names immediately
     const me = { _id: user?.id, firstName: user?.firstName || "Toi", lastName: user?.lastName || "" };
@@ -596,6 +596,8 @@ function ChatPage() {
     socketRef.current.emit("game-invite", {
       to: selectedConv.otherUser._id,
       gameType: type,
+      // Niveau de difficulté du quiz (facile/moyen/difficile/tres_difficile)
+      level: type === "quiz" ? (quizLevel || null) : undefined,
     });
   };
 

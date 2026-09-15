@@ -104,6 +104,8 @@ export interface GameState {
   attemptsBy?: Record<string, Array<{ guess: string[]; result: Array<{ color: string; status: string }> }>>;
   // Quiz multijoueur
   opponents?: Array<{ id: string; progress: number; score: number }>;
+  // Niveau de difficulté choisi (quiz)
+  difficultyLevel?: string | null;
   // Champs utilisés par les jeux historiques
   currentPlayer?: string;
   currentQuestion?: any;
@@ -300,8 +302,19 @@ const GAME_RULES: Record<GameType, { title: string; rules: string[]; tips: strin
   },
 };
 
-export function GameMenu({ onSelect, onClose }: { onSelect: (type: GameType) => void; onClose: () => void }) {
+// Niveaux de difficulté du quiz (doivent correspondre aux niveaux backend)
+export const QUIZ_LEVELS = ["facile", "moyen", "difficile", "tres_difficile"] as const;
+export type QuizLevel = (typeof QUIZ_LEVELS)[number];
+const QUIZ_LEVEL_META: Record<QuizLevel, { label: string; desc: string; badge: string }> = {
+  facile: { label: "Facile", desc: "Capitales, monuments, grands repères — accessible à tous", badge: "text-green-400 border-green-400/40 bg-green-400/10" },
+  moyen: { label: "Moyen", desc: "Il faut vraiment réfléchir : histoire, littérature, sciences", badge: "text-yellow-400 border-yellow-400/40 bg-yellow-400/10" },
+  difficile: { label: "Difficile", desc: "Pour les passionnés : dates, œuvres, mythologie", badge: "text-orange-400 border-orange-400/40 bg-orange-400/10" },
+  tres_difficile: { label: "Très difficile", desc: "Pour les spécialistes : détails pointus et chiffres exacts", badge: "text-red-400 border-red-400/40 bg-red-400/10" },
+};
+
+export function GameMenu({ onSelect, onClose }: { onSelect: (type: GameType, quizLevel?: string | null) => void; onClose: () => void }) {
   const [selectedType, setSelectedType] = useState<GameType | null>(null);
+  const [quizLevel, setQuizLevel] = useState<QuizLevel | null>(null);
   const games: { type: GameType; icon: string; name: string; desc: string; category: string }[] = [
     // Jeux de reflexes / hasard
     { type: "rps", icon: "Hand", name: "Pierre-Feuille-Ciseaux", desc: "Le classique", category: "Reflexes" },
@@ -383,9 +396,30 @@ export function GameMenu({ onSelect, onClose }: { onSelect: (type: GameType) => 
                 </div>
               )}
             </div>
+            {/* Choix du niveau — uniquement pour le quiz */}
+            {selectedType === "quiz" && (
+              <div className="px-4 pb-3">
+                <p className="text-xs font-semibold text-primary mb-2">Choisis le niveau</p>
+                <div className="space-y-1.5">
+                  {QUIZ_LEVELS.map((lvl) => {
+                    const meta = QUIZ_LEVEL_META[lvl];
+                    const sel = quizLevel === lvl;
+                    return (
+                      <button key={lvl} onClick={() => setQuizLevel(sel ? null : lvl)}
+                        className={`w-full px-3 py-2 rounded-xl border text-left transition-colors ${
+                          sel ? `${meta.badge} border-current/40` : "bg-white/5 border-white/10 hover:bg-white/10"}`}>
+                        <p className="text-xs font-bold">{meta.label}{sel && <span className="float-right">✓</span>}</p>
+                        <p className="text-[10px] text-muted-foreground leading-snug">{meta.desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-2">Aucun niveau choisi = difficulté progressive (facile → très difficile).</p>
+              </div>
+            )}
             <div className="p-4 border-t border-white/10">
               <button
-                onClick={() => { onSelect(selectedType); onClose(); }}
+                onClick={() => { onSelect(selectedType, quizLevel); onClose(); }}
                 className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
               >
                 <LucideIcons.Gamepad2 className="h-5 w-5" />
@@ -425,6 +459,7 @@ export function GameInviteCard({
   onAccept: () => void; onDecline: () => void;
 }) {
   const isFromMe = game.createdBy === currentUserId;
+  const levelMeta = game.difficultyLevel ? (QUIZ_LEVEL_META as Record<string, { label: string; desc: string; badge: string }>)[game.difficultyLevel] : null;
   return (
     <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4" onClick={onDecline}>
       <div className={`rounded-2xl border p-6 text-center max-w-[280px] w-full ${isFromMe ? "bg-[#111] border-primary/30" : "bg-[#111] border-white/10"}`}
@@ -433,6 +468,9 @@ export function GameInviteCard({
         <p className="text-sm font-bold mb-1">{GAME_NAMES[game.type]}</p>
         {game.type === "quiz" && (
           <p className="text-[10px] text-muted-foreground mb-1">20 questions · 4 réponses · questions IA 🧠</p>
+        )}
+        {game.type === "quiz" && levelMeta && (
+          <span className={`inline-block mb-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${levelMeta.badge}`}>Niveau : {levelMeta.label}</span>
         )}
         <p className="text-[11px] text-muted-foreground mb-4">
           {isFromMe ? "En attente de réponse..." : "Tu as été défié !"}
@@ -2091,7 +2129,7 @@ export function GameRenderer({
     case "dice":
       return <DiceGame game={game} {...common} onMove={(move) => onMove({ gameId: game.id, move })} onRematch={onRematch} onNextRound={onNextRound} />;
     case "dice_duel":
-      return <DiceDuelGame game={game} {...common} onMove={(move) => onMove({ gameId: game.id, move })} onRematch={onRematch} />;
+      return <DiceDuelGame game={game} {...common} onMove={(data) => onMove({ gameId: game.id, ...data })} onRematch={onRematch} />;
     case "quiz":
       return <QuizGame game={game} {...common} onMove={(data) => onMove({ gameId: game.id, ...data })} onRematch={onRematch} />;
     case "code_secret":

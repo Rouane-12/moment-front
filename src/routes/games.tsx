@@ -35,9 +35,10 @@ type BuzzerGame = {
 
 type QuizGame = {
   id: string; type: "quiz";
-  players: string[]; scores: Record<string, number>; correctCount: Record<string, number>;
+  players: string[];  scores: Record<string, number>; correctCount: Record<string, number>;
   state: "waiting" | "playing" | "finished";
   quizStatus: "generating" | "ready" | "error"; quizError?: string | null;
+  difficultyLevel?: string | null;
   questions: Array<{ id: string; question: string; answers: string[]; difficulty: string; points: number }>;
   order: number[]; progress: number;
   pstate: "idle" | "question" | "feedback" | "done";
@@ -223,6 +224,7 @@ function GamesPage() {
   }, [contacts, user?.id]);
 
   const selectedMode = GAME_MODES.find((m) => m.id === selectedGameMode) || null;
+  const [quizLevel, setQuizLevel] = useState<string | null>(null);
 
   const togglePlayer = (userId: string) => {
     if (!selectedMode) return;
@@ -238,7 +240,7 @@ function GamesPage() {
     if (selectedPlayers.length + 1 < selectedMode.minPlayers) return;
     const s = socketRef.current;
     if (selectedMode.id === "infiltrated") s.emit("infiltrated-create", { players: selectedPlayers });
-    else if (selectedMode.id === "quiz") s.emit("quiz-create", { players: selectedPlayers });
+    else if (selectedMode.id === "quiz") s.emit("quiz-create", { players: selectedPlayers, level: quizLevel || null });
     else if (selectedMode.id === "mot_intrus_multi") s.emit("motintrusmulti-create", { players: selectedPlayers });
     else if (selectedMode.id === "dice_spirale") s.emit("dicespirale-create", { players: selectedPlayers });
     setShowRules(null);
@@ -490,6 +492,27 @@ function GamesPage() {
                     </li>
                   ))}
                 </ul>
+
+                {/* Choix du niveau — uniquement pour le quiz */}
+                {selectedMode.id === "quiz" && (
+                  <div className="mt-4 pt-4 border-t border-white/10">
+                    <h3 className="text-xs font-semibold text-primary mb-2">Niveau de difficulté</h3>
+                    <div className="space-y-1.5">
+                      {QUIZ_LEVELS_UI.map((lvl) => {
+                        const sel = quizLevel === lvl.id;
+                        return (
+                          <button key={lvl.id} onClick={() => setQuizLevel(sel ? null : lvl.id)}
+                            className={`w-full px-3 py-2 rounded-xl border text-left transition-colors ${
+                              sel ? lvl.cls : "bg-white/5 border-white/10 hover:bg-white/10"}`}>
+                            <p className="text-xs font-bold">{lvl.label}{sel && <span className="float-right">✓</span>}</p>
+                            <p className="text-[10px] text-muted-foreground leading-snug">{lvl.desc}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-2">Aucun niveau choisi = difficulté progressive (facile → très difficile).</p>
+                  </div>
+                )}
               </div>
               <div className="px-4 py-3 border-t border-white/10">
                 <button
@@ -1209,6 +1232,10 @@ function QuizSession({ game, socketRef, me, nameOf, exitGame }: {
   const question = qIndex !== undefined ? game.questions?.[qIndex] : undefined;
   const secondsLeft = game.deadline ? Math.max(0, Math.ceil((game.deadline - now) / 1000)) : null;
 
+  const levelLabel = (game as any).difficultyLevel
+    ? ({ facile: "Facile", moyen: "Moyen", difficile: "Difficile", tres_difficile: "Très difficile" } as any)[(game as any).difficultyLevel] || (game as any).difficultyLevel
+    : null;
+
   const difficultyLabel = (d: string) => ({ facile: "Facile", moyen: "Moyen", difficile: "Difficile", tres_difficile: "Très difficile", expert: "Expert" } as any)[d] || d;
   const difficultyStyle = (d: string) => ({ facile: "text-green-400 bg-green-500/20", moyen: "text-yellow-400 bg-yellow-500/20", difficile: "text-orange-400 bg-orange-500/20", tres_difficile: "text-red-400 bg-red-500/20", expert: "text-pink-400 bg-pink-500/20" } as any)[d] || "text-gray-400 bg-gray-500/20";
 
@@ -1219,8 +1246,8 @@ function QuizSession({ game, socketRef, me, nameOf, exitGame }: {
     <SessionShell
       title={<span className="inline-flex items-center gap-1.5"><Brain className="h-4 w-4 text-primary" /> Quiz Culture</span>}
       subtitle={
-        game.state === "waiting" ? "Salon en attente" :
-        game.quizStatus !== "ready" ? "Préparation des questions…" :
+        game.state === "waiting" ? (levelLabel ? `Salon en attente · Niveau ${levelLabel}` : "Salon en attente") :
+        game.quizStatus !== "ready" ? (levelLabel ? `Préparation · Niveau ${levelLabel}…` : "Préparation des questions…") :
         game.pstate === "done" ? "Tu as terminé !" :
         `Question ${Math.min(progress + 1, total)} / ${total}`
       }
@@ -1330,35 +1357,46 @@ function QuizSession({ game, socketRef, me, nameOf, exitGame }: {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SESSION — COURSE EN SPIRALE (plateau de dés multijoueur)
+// SESSION — COURSE EN SPIRALE (vraie spirale ronde, rendu SVG)
 // ═══════════════════════════════════════════════════════════════
-const SPIRALE_SIZE = 7;
-const PLAYER_COLORS = [
-  "bg-pink-500", "bg-sky-500", "bg-emerald-500", "bg-amber-500", "bg-violet-500", "bg-rose-500",
-];
+// Géométrie polaire : la case 0 (DÉPART) est sur le bord, les cases
+// s'enroulent en spirale (≈ 3.6 tours) et la FIN est au centre.
+const SPIRALE_VIEWBOX = 300;
+const SPIRALE_CENTER = SPIRALE_VIEWBOX / 2;
+const SPIRALE_R_MAX = 128;   // rayon du bord (case DÉPART)
+const SPIRALE_R_MIN = 26;    // rayon de la dernière boucle
+const SPIRALE_TURNS = 3.8;   // nombre de tours de spirale (optimal : spires jamais confondues)
+const SPIRALE_TURN = Math.PI * 2 * SPIRALE_TURNS;
 
-/** Trajet en spirale d'une grille n×n : index de case → [ligne, colonne]. */
-function spiralPath(n: number): Array<[number, number]> {
-  const coords: Array<[number, number]> = [];
-  let top = 0, bottom = n - 1, left = 0, right = n - 1;
-  while (top <= bottom && left <= right) {
-    for (let c = left; c <= right; c++) coords.push([top, c]);
-    top++;
-    for (let r = top; r <= bottom; r++) coords.push([r, right]);
-    right--;
-    if (top <= bottom) { for (let c = right; c >= left; c--) coords.push([bottom, c]); bottom--; }
-    if (left <= right) { for (let r = bottom; r >= top; r--) coords.push([r, left]); left++; }
+const SPIRALE_LAST = 48; // index de la case FIN (identique au backend)
+const SPIRALE_TURN_DENO = SPIRALE_LAST;
+
+/** Chemin SVG continu qui relie toutes les cases de la spirale jusqu'au centre. */
+const SPIRALE_PATH_D: string = (() => {
+  let d = "";
+  for (let i = 0; i <= SPIRALE_LAST; i++) {
+    const [x, y] = spiraleXY(i);
+    d += (i === 0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1) + " ";
   }
-  return coords;
+  return d;
+})();
+
+/** Position (x, y) de la case i (0..47) sur la spirale. La case 48 = FIN est au centre. */
+function spiraleXY(i: number): [number, number] {
+  if (i >= SPIRALE_LAST) return [SPIRALE_CENTER, SPIRALE_CENTER];
+  const f = i / SPIRALE_TURN_DENO;
+  const t = f * SPIRALE_TURN;
+  const r = SPIRALE_R_MAX - (SPIRALE_R_MAX - SPIRALE_R_MIN) * f;
+  return [
+    SPIRALE_CENTER + r * Math.cos(t),
+    SPIRALE_CENTER + r * Math.sin(t),
+  ];
+}
+/** Rayon d'affichage d'une case : un peu plus petit vers le centre (spires resserrées). */
+function spiraleTileR(i: number): number {
+  return 12.5 - 4.5 * Math.min(1, i / SPIRALE_TURN_DENO);
 }
 
-const SPIRALE_PATH = spiralPath(SPIRALE_SIZE);
-// Grille ligne par ligne : chaque cellule contient l'index de la case
-const SPIRALE_GRID: number[][] = (() => {
-  const g: number[][] = Array.from({ length: SPIRALE_SIZE }, () => new Array(SPIRALE_SIZE).fill(-1));
-  SPIRALE_PATH.forEach(([r, c], idx) => { g[r]![c] = idx; });
-  return g;
-})();
 
 function DieIcon({ value, className = "h-8 w-8" }: { value: number; className?: string }) {
   const faces = [Dice1, Dice2, Dice3, Dice4, Dice5, Dice6];
@@ -1366,15 +1404,40 @@ function DieIcon({ value, className = "h-8 w-8" }: { value: number; className?: 
   return <Icon className={className} />;
 }
 
-function tileVisual(tile: { effect: string; value: number }) {
-  switch (tile.effect) {
-    case "plus": return { cls: "bg-green-500/15 border-green-500/30 text-green-300", text: `+${tile.value}` };
-    case "minus": return { cls: "bg-red-500/15 border-red-500/30 text-red-300", text: `−${tile.value}` };
-    case "relance": return { cls: "bg-yellow-500/15 border-yellow-500/30 text-yellow-300", text: "" };
-    case "rift": return { cls: "bg-violet-500/15 border-violet-500/30 text-violet-300", text: "" };
-    case "finish": return { cls: "bg-primary/25 border-primary/50 text-primary", text: "FIN" };
-    case "start": return { cls: "bg-sky-500/15 border-sky-500/30 text-sky-300", text: "DEP" };
-    default: return { cls: "bg-white/5 border-white/10 text-muted-foreground", text: "" };
+const SPIRALE_COLORS = ["#ec4899", "#3b82f6", "#22c55e", "#eab308", "#a855f7", "#f97316"];
+
+// Couleurs des effets de case (remplit la pastille SVG)
+function tileFill(tile: { effect: string; value: number } | undefined): string {
+  switch (tile?.effect) {
+    case "plus": return "rgba(34,197,94,0.22)";
+    case "minus": return "rgba(239,68,68,0.22)";
+    case "relance": return "rgba(234,179,8,0.25)";
+    case "rift": return "rgba(168,85,247,0.25)";
+    case "finish": return "rgba(59,130,246,0.35)";
+    case "start": return "rgba(56,189,248,0.25)";
+    default: return "rgba(255,255,255,0.07)";
+  }
+}
+function tileStroke(tile: { effect: string; value: number } | undefined): string {
+  switch (tile?.effect) {
+    case "plus": return "rgba(34,197,94,0.65)";
+    case "minus": return "rgba(239,68,68,0.65)";
+    case "relance": return "rgba(234,179,8,0.8)";
+    case "rift": return "rgba(168,85,247,0.8)";
+    case "finish": return "rgba(59,130,246,0.95)";
+    case "start": return "rgba(56,189,248,0.8)";
+    default: return "rgba(255,255,255,0.22)";
+  }
+}
+function tileLabel(tile: { effect: string; value: number } | undefined): string {
+  switch (tile?.effect) {
+    case "plus": return `+${tile!.value}`;
+    case "minus": return `−${tile!.value}`;
+    case "relance": return "↻";
+    case "rift": return "⚡";
+    case "finish": return "FIN";
+    case "start": return "DÉP";
+    default: return "";
   }
 }
 
@@ -1383,9 +1446,12 @@ function SpiraleSession({ game, socketRef, me, nameOf, exitGame }: {
   nameOf: (id: string) => string; exitGame: () => void;
 }) {
   const myTurn = game.state === "playing" && game.turn === me;
+  // BEFORE the player has rolled this turn, there is no die yet.
+  // Show a clear wait state instead of hiding the die area.
+  const beforeRoll = myTurn && (game.phase === 'rolling' || (game.phase === 'choose' && !game.dice));
   const playersAt = (idx: number) => game.players.filter((p) => game.pos[p] === idx);
   const formatLog = (text: string) => {
-    let out = text;
+    let out = String(text);
     for (const id of game.players) out = out.split(id).join(nameOf(id));
     return out;
   };
@@ -1396,7 +1462,7 @@ function SpiraleSession({ game, socketRef, me, nameOf, exitGame }: {
       title={<span className="inline-flex items-center gap-1.5"><Dices className="h-4 w-4 text-primary" /> Course en Spirale</span>}
       subtitle={
         game.state === "waiting" ? "Salon en attente" :
-        game.state === "playing" ? (myTurn ? "C'est ton tour !" : `Au tour de ${nameOf(game.turn)}`) :
+        game.state === "playing" ? (myTurn ? (beforeRoll ? "Lance le dé pour commencer" : "À toi de jouer !") : `Au tour de ${nameOf(game.turn)}`) :
         "Partie terminée"
       }
       onExit={exitGame}
@@ -1412,37 +1478,55 @@ function SpiraleSession({ game, socketRef, me, nameOf, exitGame }: {
 
       {game.state === "playing" && (
         <div className="w-full max-w-[460px] mx-auto">
-          {/* Plateau en spirale — DÉPART en haut à gauche, FIN au centre */}
-          <div className="grid grid-cols-7 gap-1 sm:gap-1.5 w-full mb-3">
-            {SPIRALE_GRID.flat().map((idx) => {
-              const tile = game.board?.[idx] || { effect: "none", value: 0 };
-              const vis = tileVisual(tile);
+          {/* Vraie spirale ronde — rendu SVG, DÉPART sur le bord, FIN au centre */}
+          <svg
+            viewBox="0 0 300 300"
+            className="w-full h-auto mb-3 select-none"
+            role="img"
+            aria-label="Plateau en spirale"
+          >
+            {/* Fond */}
+            <circle cx={150} cy={150} r={146} fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" />
+            {/* Chemin de la spirale */}
+            <path d={SPIRALE_PATH_D} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth={11} strokeLinecap="round" />
+            {/* Cases */}
+            {game.board?.map((tile, idx) => {
+              const [x, y] = spiraleXY(idx);
               const here = playersAt(idx);
+              const isMyTile = idx === (game.pos[me] ?? 0);
+              const r = spiraleTileR(idx);
               return (
-                <div key={idx} className={`relative aspect-square rounded-lg border flex flex-col items-center justify-center ${vis.cls}`}>
-                  <span className="text-[9px] font-bold leading-none flex items-center">
-                    {tile.effect === "relance" ? <RotateCw className="h-3 w-3" />
-                      : tile.effect === "rift" ? <Zap className="h-3 w-3" />
-                      : tile.effect === "finish" ? <Flag className="h-3 w-3" />
-                      : vis.text}
-                  </span>
+                <g key={idx}>
+                  <circle
+                    cx={x} cy={y} r={r}
+                    fill={tileFill(tile)}
+                    stroke={isMyTile ? "#fff" : tileStroke(tile)}
+                    strokeWidth={isMyTile ? 2.2 : 1.2}
+                  />
+                  <text x={x} y={y + 2.6} textAnchor="middle" fontSize={idx >= SPIRALE_LAST ? 8 : 7.6} fontWeight={700}
+                    fill={tile?.effect === "none" ? "rgba(255,255,255,0.55)" : "#fff"}>
+                    {tileLabel(tile)}
+                  </text>
                   {here.length > 0 && (
-                    <div className="absolute inset-x-0 bottom-0.5 flex justify-center gap-0.5">
-                      {here.map((p) => (
-                        <span
-                          key={p}
-                          title={nameOf(p)}
-                          className={`w-3.5 h-3.5 rounded-full border border-background text-[7px] font-bold text-white flex items-center justify-center ${PLAYER_COLORS[game.players.indexOf(p) % PLAYER_COLORS.length]}`}
-                        >
-                          {nameOf(p).charAt(0)}
-                        </span>
-                      ))}
-                    </div>
+                    here.map((p, k) => {
+                      const color = SPIRALE_COLORS[game.players.indexOf(p) % SPIRALE_COLORS.length];
+                      // Décalage pour ne pas superposer deux jetons sur la même case
+                      const dx = here.length > 1 ? (k === 0 ? -5.5 : 5.5) : 0;
+                      const dy = here.length > 2 ? (k < 2 ? -4 : 4) : 0;
+                      return (
+                        <g key={p} transform={`translate(${x + dx} ${y + dy})`}>
+                          <circle r={8.5} fill={color} stroke="#0b0b0f" strokeWidth={1.8} />
+                          <text y={3} textAnchor="middle" fontSize={8} fontWeight={800} fill="#fff">
+                            {nameOf(p).charAt(0).toUpperCase()}
+                          </text>
+                        </g>
+                      );
+                    })
                   )}
-                </div>
+                </g>
               );
             })}
-          </div>
+          </svg>
 
           {/* Dé + action */}
           <div className="flex items-center gap-3 mb-3">
@@ -1451,24 +1535,34 @@ function SpiraleSession({ game, socketRef, me, nameOf, exitGame }: {
             </div>
             <button
               onClick={() => socketRef.current?.emit("game-move", { gameId: game.id, move: "roll" })}
-              disabled={!myTurn}
+              disabled={!myTurn || beforeRoll}
               className="flex-1 min-w-0 py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
             >
               <Dices className="h-5 w-5 shrink-0" />
-              <span className="truncate">{myTurn ? "Lancer le dé" : `En attente de ${nameOf(game.turn)}`}</span>
+              <span className="truncate">{myTurn ? (beforeRoll ? "En attente du tour…" : "Lancer le dé") : `En attente de ${nameOf(game.turn)}`}</span>
             </button>
           </div>
 
-          {/* Positions */}
+          {/* Positions — gros jetons visibles, couleurs de la spirale */}
           <div className="flex flex-wrap gap-2 justify-center mb-3">
-            {game.players.map((pId, i) => (
-              <span key={pId} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] ${pId === game.turn ? "bg-primary/20 border-primary/40" : "bg-white/5 border-white/10"}`}>
-                <span className={`w-2.5 h-2.5 rounded-full ${PLAYER_COLORS[i % PLAYER_COLORS.length]}`} />
+            {game.players.map((pId) => (
+              <span key={pId} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11px] ${pId === game.turn ? "bg-primary/20 border-primary/40" : "bg-white/5 border-white/10"}`}>
+                <span
+                  className="w-5 h-5 rounded-full border-2 border-white/70 flex items-center justify-center text-[10px] font-bold text-white"
+                  style={{ background: SPIRALE_COLORS[game.players.indexOf(pId) % SPIRALE_COLORS.length] }}
+                >
+                  {nameOf(pId).charAt(0).toUpperCase()}
+                </span>
                 <span className="max-w-[80px] truncate">{pId === me ? "Toi" : nameOf(pId)}</span>
                 <span className="font-bold">case {game.pos[pId] ?? 0}</span>
               </span>
             ))}
           </div>
+
+          {/* Légende */}
+          <p className="text-center text-[10px] text-muted-foreground mb-3">
+            Départ sur le bord · fin au centre · <span className="text-green-400">+ bonus</span> · <span className="text-red-400">− piège</span> · ↻ relance · ⚡ rift
+          </p>
 
           {game.log?.length > 0 && (
             <div className="rounded-xl bg-white/5 border border-white/10 p-2 max-h-32 overflow-y-auto text-left">
@@ -1490,7 +1584,12 @@ function SpiraleSession({ game, socketRef, me, nameOf, exitGame }: {
           <div className="space-y-1.5 mb-6 text-left">
             {ranked.map((pId) => (
               <div key={pId} className={`flex items-center gap-3 px-3 py-2 rounded-xl border ${game.winner === pId ? "bg-yellow-500/15 border-yellow-500/40" : "bg-white/5 border-white/10"}`}>
-                <span className={`w-3 h-3 rounded-full ${PLAYER_COLORS[game.players.indexOf(pId) % PLAYER_COLORS.length]}`} />
+                <span
+                  className="w-6 h-6 rounded-full border-2 border-white/70 flex items-center justify-center text-[11px] font-bold text-white"
+                  style={{ background: SPIRALE_COLORS[game.players.indexOf(pId) % SPIRALE_COLORS.length] }}
+                >
+                  {nameOf(pId).charAt(0).toUpperCase()}
+                </span>
                 <span className="text-sm flex-1 truncate">{nameOf(pId)}</span>
                 <span className="text-xs font-bold">case {game.pos[pId] ?? 0}</span>
               </div>
@@ -1515,7 +1614,7 @@ const GAME_MODES: GameMode[] = [
   },
   {
     id: "quiz", name: "Quiz Culture", icon: Brain,
-    description: "Les mêmes questions pour tous, chacun à son rythme",
+    description: "Les mêmes questions pour tous, avec le niveau choisi",
     minPlayers: 2, maxPlayers: 8, category: "Culture",
   },
   {
@@ -1528,6 +1627,14 @@ const GAME_MODES: GameMode[] = [
     description: "Plateau de dés : bonus, pièges et rifts jusqu'à la FIN",
     minPlayers: 2, maxPlayers: 6, category: "Dés",
   },
+];
+
+// ── Niveaux de difficulté du quiz (page Jeux) ─────────────────
+const QUIZ_LEVELS_UI: Array<{ id: string; label: string; desc: string; cls: string }> = [
+  { id: "facile", label: "Facile", desc: "Capitales, monuments, grands repères — accessible à tous", cls: "bg-green-400/10 border-green-400/40" },
+  { id: "moyen", label: "Moyen", desc: "Il faut vraiment réfléchir : histoire, littérature, sciences", cls: "bg-yellow-400/10 border-yellow-400/40" },
+  { id: "difficile", label: "Difficile", desc: "Pour les passionnés : dates, œuvres, mythologie", cls: "bg-orange-400/10 border-orange-400/40" },
+  { id: "tres_difficile", label: "Très difficile", desc: "Pour les spécialistes : détails pointus et chiffres exacts", cls: "bg-red-400/10 border-red-400/40" },
 ];
 
 // ── Règles affichées avant chaque partie ───────────────────────
@@ -1552,14 +1659,15 @@ const GAME_RULES: Record<string, { rules: string[]; tips: string[] }> = {
     rules: [
       "2 à 8 joueurs. Tout le monde reçoit EXACTEMENT les mêmes questions, mais dans un ordre différent pour chacun.",
       "Chacun joue à son rythme : aucune course, ta connexion ne te désavantage pas.",
+      "Avant de lancer, l'hôte choisit un niveau : Facile, Moyen, Difficile ou Très difficile (ou difficulté progressive).",
       "4 réponses possibles par question, 20 secondes pour répondre.",
       "Points : Facile +100, Moyen +200, Difficile +300, Très difficile +500.",
-      "20 questions au total, de facile à très difficile. Le meilleur score gagne.",
+      "20 questions au total. Le meilleur score gagne.",
       "Tu peux abandonner à tout moment : la partie s'arrête alors pour tout le monde.",
     ],
     tips: [
       "Prends ton temps : répondre juste rapporte plus qu'aller vite.",
-      "Les questions difficiles valent beaucoup plus de points.",
+      "Choisis le niveau selon le groupe : tout le monde doit pouvoir jouer.",
     ],
   },
   mot_intrus_multi: {
