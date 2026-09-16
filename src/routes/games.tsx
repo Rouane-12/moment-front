@@ -1235,6 +1235,10 @@ function QuizSession({ game, socketRef, me, nameOf, exitGame }: {
   const progress = game.progress || 0;
   const qIndex = game.order?.[progress];
   const question = qIndex !== undefined ? game.questions?.[qIndex] : undefined;
+  // Pendant le feedback, progress est DÉJÀ incrémenté par le serveur : la bonne
+  // réponse à afficher est celle de la question qu'on VIENT de répondre
+  // (lastResult.qIndex), pas celle de la question suivante.
+  const answeredQuestion = game.lastResult ? game.questions?.[game.lastResult.qIndex] : undefined;
   const secondsLeft = game.deadline ? Math.max(0, Math.ceil((game.deadline - now) / 1000)) : null;
 
   const levelLabel = (game as any).difficultyLevel
@@ -1331,8 +1335,11 @@ function QuizSession({ game, socketRef, me, nameOf, exitGame }: {
                     {game.lastResult.correct ? `Bonne réponse ! +${game.lastResult.points} pts` : game.lastResult.timedOut ? "Temps écoulé" : "Mauvaise réponse"}
                   </span>
                 </div>
-                {!game.lastResult.correct && question && (
-                  <p className="text-xs text-muted-foreground break-words">Bonne réponse : {question.answers[game.lastResult.correctIndex] ?? "?"}</p>
+                {answeredQuestion && (
+                  <p className="text-[11px] text-muted-foreground/70 break-words">{answeredQuestion.question}</p>
+                )}
+                {!game.lastResult.correct && answeredQuestion && (
+                  <p className="text-xs text-green-400 break-words font-medium">Bonne réponse : {answeredQuestion.answers?.[game.lastResult.correctIndex] ?? "?"}</p>
                 )}
                 <button onClick={next} className="mt-3 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">Question suivante</button>
               </div>
