@@ -1446,9 +1446,8 @@ function SpiraleSession({ game, socketRef, me, nameOf, exitGame }: {
   nameOf: (id: string) => string; exitGame: () => void;
 }) {
   const myTurn = game.state === "playing" && game.turn === me;
-  // BEFORE the player has rolled this turn, there is no die yet.
-  // Show a clear wait state instead of hiding the die area.
-  const beforeRoll = myTurn && (game.phase === 'rolling' || (game.phase === 'choose' && !game.dice));
+  // NB : en spirale, `phase` reste "rolling" du début à la fin — ce n'est PAS
+  // un état d'attente. C'est mon tour => je peux lancer, point.
   const playersAt = (idx: number) => game.players.filter((p) => game.pos[p] === idx);
   const formatLog = (text: string) => {
     let out = String(text);
@@ -1462,7 +1461,7 @@ function SpiraleSession({ game, socketRef, me, nameOf, exitGame }: {
       title={<span className="inline-flex items-center gap-1.5"><Dices className="h-4 w-4 text-primary" /> Course en Spirale</span>}
       subtitle={
         game.state === "waiting" ? "Salon en attente" :
-        game.state === "playing" ? (myTurn ? (beforeRoll ? "Lance le dé pour commencer" : "À toi de jouer !") : `Au tour de ${nameOf(game.turn)}`) :
+        game.state === "playing" ? (myTurn ? "À toi de jouer — lance le dé !" : `Au tour de ${nameOf(game.turn)}`) :
         "Partie terminée"
       }
       onExit={exitGame}
@@ -1535,11 +1534,11 @@ function SpiraleSession({ game, socketRef, me, nameOf, exitGame }: {
             </div>
             <button
               onClick={() => socketRef.current?.emit("game-move", { gameId: game.id, move: "roll" })}
-              disabled={!myTurn || beforeRoll}
+              disabled={!myTurn}
               className="flex-1 min-w-0 py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
             >
               <Dices className="h-5 w-5 shrink-0" />
-              <span className="truncate">{myTurn ? (beforeRoll ? "En attente du tour…" : "Lancer le dé") : `En attente de ${nameOf(game.turn)}`}</span>
+              <span className="truncate">{myTurn ? "Lancer le dé" : `En attente de ${nameOf(game.turn)}`}</span>
             </button>
           </div>
 
