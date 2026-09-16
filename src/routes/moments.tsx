@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { formatFcfa } from "@/lib/moment-engine";
 import { api } from "@/lib/api";
-import { Dice5 } from "lucide-react";
+import { Dice5, Dumbbell } from "lucide-react";
 
 export const Route = createFileRoute("/moments")({
   head: () => ({
@@ -29,6 +29,7 @@ const TABS = ["À venir", "En cours", "Terminés", "Annulés"] as const;
 type ApiMoment = {
   _id: string;
   title: string;
+  momentType?: "detente" | "activite";
   date: string;
   startTime: string;
   peopleCount: number;
@@ -113,16 +114,33 @@ function Moments() {
                     key={m._id}
                     to="/moment/$id"
                     params={{ id: m._id }}
+                    search={{
+                      city: "Cotonou",
+                      people: m.peopleCount || 2,
+                      budget: m.totalPrice || 10000,
+                      when: m.date || "Ce soir",
+                      start: m.startTime || "19:00",
+                      vibes: "detente",
+                      transport: "peu_importe",
+                      roll: 0,
+                      variant: 0,
+                    }}
                     className="hover-lift surface-panel flex flex-col gap-4 md:gap-5 overflow-hidden sm:flex-row"
                   >
-                    <img
-                      src={m.steps?.[0]?.venue?.media?.[0]?.url || beach}
-                      loading="lazy"
-                      width={1200}
-                      height={800}
-                      alt={m.title}
-                      className="h-32 md:h-40 w-full object-cover sm:w-56"
-                    />
+                    {m.momentType === "activite" || !m.steps?.[0]?.venue?.media?.[0]?.url ? (
+                      <div className="flex h-32 md:h-40 w-full items-center justify-center bg-secondary sm:w-56">
+                        <Dumbbell className="h-10 w-10 text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <img
+                        src={m.steps?.[0]?.venue?.media?.[0]?.url}
+                        loading="lazy"
+                        width={1200}
+                        height={800}
+                        alt={m.title}
+                        className="h-32 md:h-40 w-full object-cover sm:w-56"
+                      />
+                    )}
                     <div className="flex-1 p-4 md:p-5">
                       <p className="label-mono text-xs">
                         {m._id.slice(-6)} · {m.date} · {m.startTime}

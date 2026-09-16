@@ -274,13 +274,24 @@ function CreateMoment() {
           vibes: vibes.join(","),
           transport,
           roll,
-          date: new Date().toISOString().split("T")[0],
+          date: new Date().toISOString().split("T")[0] || "",
         });
 
-        if (response.success && response.moment) {
+        if (response.success && response["moment"]) {
           navigate({
             to: "/moment/$id",
-            params: { id: response.moment.id },
+            params: { id: response["moment"].id },
+            search: {
+              city,
+              people,
+              budget,
+              when: getDisplayDate(),
+              start: startTime,
+              vibes: vibes.join(","),
+              transport,
+              roll,
+              variant: 0,
+            },
           });
         }
       } catch (error) {
