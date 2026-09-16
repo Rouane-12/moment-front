@@ -45,6 +45,8 @@ function AdminPartners() {
     name: '', activity: 'football', address: '', district: '',
     city: 'Cotonou', phone: '', horaires: '',
   });
+  // Onglet : demandes de lieux de détente / lieux d'activité
+  const [tab, setTab] = useState<"detente" | "activite">("detente");
 
   useEffect(() => {
     fetchRequests();
@@ -165,7 +167,90 @@ function AdminPartners() {
       <div>
         <h1 className="text-display text-4xl uppercase mb-6">Demandes partenaires</h1>
 
-        <div className="surface-panel p-6">
+        {/* Onglets : détente / activité */}
+        <div className="flex flex-wrap gap-2 mb-6">
+          <button
+            type="button"
+            onClick={() => setTab("detente")}
+            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors ${
+              tab === "detente" ? "bg-primary text-white" : "bg-secondary text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Lieux de détente {requests.length > 0 && `(${requests.length})`}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("activite")}
+            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors ${
+              tab === "activite" ? "bg-primary text-white" : "bg-secondary text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Lieux d'activité {activityRequests.length > 0 && `(${activityRequests.length})`}
+          </button>
+        </div>
+
+        {tab === "activite" && (
+          <div className="surface-panel p-6">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-semibold">Propositions de lieux d'activité (en attente)</p>
+              <button
+                type="button"
+                onClick={() => setShowAddActivity(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium"
+              >
+                <PlusCircle className="h-4 w-4" /> Ajouter un lieu
+              </button>
+            </div>
+            {activityRequests.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground">
+                <Dumbbell className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                <p className="text-sm">Aucune proposition en attente</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {activityRequests.map((a) => (
+                  <div key={a._id} className="border border-white/10 rounded-lg p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold">{a.name}</h3>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground mt-2">
+                          <span className="capitalize">{a.activity}</span>
+                          {a.district && <span>{a.district}</span>}
+                          <span>{a.city}</span>
+                          {a.phone && <span>{a.phone}</span>}
+                        </div>
+                        {a.submittedBy && (
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Proposé par {a.submittedBy.firstName} {a.submittedBy.lastName}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleApproveActivity(a._id)}
+                          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors text-sm font-medium"
+                        >
+                          <Check className="h-4 w-4" /> Approuver
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRejectActivity(a._id)}
+                          className="p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
+                          title="Refuser"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className={`surface-panel p-6 ${tab === "detente" ? "" : "hidden"}`}>
           <div className="flex items-center gap-4 mb-6">
             <select
               value={statusFilter}
@@ -273,71 +358,6 @@ function AdminPartners() {
                           Créer le lieu
                         </button>
                       )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Lieux d'activités — ajout direct + propositions en attente */}
-        <div className="surface-panel p-6 mt-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Dumbbell className="h-5 w-5 text-primary" />
-            <h2 className="font-semibold">Lieux d'activités</h2>
-            <button
-              type="button"
-              onClick={() => setShowAddActivity(true)}
-              className="ml-auto flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium"
-            >
-              <PlusCircle className="h-4 w-4" /> Ajouter un lieu
-            </button>
-          </div>
-
-          {activityRequests.length > 0 && (
-            <p className="text-xs text-yellow-500 mb-4">{activityRequests.length} proposition(s) en attente de validation :</p>
-          )}
-          {activityRequests.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Dumbbell className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p className="text-sm">Aucune proposition de lieu d'activité en attente</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {activityRequests.map((a) => (
-                <div key={a._id} className="border border-white/10 rounded-lg p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold">{a.name}</h3>
-                      <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground mt-2">
-                        <span className="capitalize">{a.activity}</span>
-                        {a.district && <span>{a.district}</span>}
-                        <span>{a.city}</span>
-                        {a.phone && <span>{a.phone}</span>}
-                      </div>
-                      {a.submittedBy && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Proposé par {a.submittedBy.firstName} {a.submittedBy.lastName}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleApproveActivity(a._id)}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors text-sm font-medium"
-                      >
-                        <Check className="h-4 w-4" /> Approuver
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRejectActivity(a._id)}
-                        className="p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
-                        title="Refuser"
-                      >
-                        <X className="h-5 w-5" />
-                      </button>
                     </div>
                   </div>
                 </div>

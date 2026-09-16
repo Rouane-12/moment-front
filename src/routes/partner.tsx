@@ -35,12 +35,16 @@ function PartnerLayout() {
 function PartnerDashboard() {
   const { user, isAuthenticated, isPartner } = useAuth();
   const [requests, setRequests] = useState<VenueRequest[]>([]);
+  const [activityRequests, setActivityRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPaymentWidget, setShowPaymentWidget] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<VenueRequest | null>(null);
 
   useEffect(() => {
-    if (isAuthenticated && isPartner) fetchRequests();
+    if (isAuthenticated && isPartner) {
+      fetchRequests();
+      fetchActivityRequests();
+    }
   }, [isAuthenticated, isPartner]);
 
   const fetchRequests = async () => {
@@ -51,6 +55,15 @@ function PartnerDashboard() {
       console.error('Failed to fetch requests:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchActivityRequests = async () => {
+    try {
+      const response = await api.activities.myRequests();
+      if (response.success && response['activities']) setActivityRequests(response['activities']);
+    } catch (error) {
+      console.error('Failed to fetch activity requests:', error);
     }
   };
 
@@ -125,7 +138,7 @@ function PartnerDashboard() {
 
       <div className="surface-panel p-6 mb-8">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold">Mes demandes de lieux</h2>
+          <h2 className="text-xl font-semibold">Mes demandes</h2>
           <a
             href="/partner/request"
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors"
@@ -134,6 +147,45 @@ function PartnerDashboard() {
             Nouvelle demande
           </a>
         </div>
+
+        {/* Demandes de lieux d'activité */}
+        {activityRequests.length > 0 && (
+          <div className="mb-6">
+            <p className="label-mono text-xs uppercase text-muted-foreground mb-3">Lieux d'activité</p>
+            <div className="space-y-3">
+              {activityRequests.map((a) => (
+                <div key={a._id} className="border border-white/10 rounded-lg p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-semibold">{a.name}</h3>
+                      <p className="text-sm text-muted-foreground capitalize">{a.activity} · {a.city}</p>
+                    </div>
+                    {a.status === 'pending' && (
+                      <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-yellow-500/10 text-yellow-500">
+                        <Clock className="h-3 w-3" /> En attente
+                      </span>
+                    )}
+                    {a.status === 'approved' && (
+                      <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-green-500/10 text-green-500">
+                        <CheckCircle className="h-3 w-3" /> Publié
+                      </span>
+                    )}
+                    {a.status === 'rejected' && (
+                      <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-red-500/10 text-red-500">
+                        <XCircle className="h-3 w-3" /> Refusé
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Demandes de lieux de détente */}
+        {requests.length > 0 && (
+          <p className="label-mono text-xs uppercase text-muted-foreground mb-3">Lieux de détente</p>
+        )}
 
         {loading ? (
           <div className="text-center py-8">

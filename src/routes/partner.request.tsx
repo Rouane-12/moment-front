@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import * as LucideIcons from "lucide-react";
 
-const { ArrowLeft, MapPin, Phone, Globe, X, Save, Upload } = LucideIcons;
+const { ArrowLeft, MapPin, Phone, Globe, X, Save, Upload, CheckCircle } = LucideIcons;
 
 const CATEGORIES = [
   'plage', 'food', 'gaming', 'bar', 'cinema', 'concert', 'culture', 'rooftop',
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/partner/request")({
 });
 
 function PartnerRequest() {
-  const { isAuthenticated, isPartner } = useAuth();
+  const { isAuthenticated, isPartner, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
@@ -58,10 +58,42 @@ function PartnerRequest() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
+  // Onglet du type de demande : « detente » (lieu classique, long formulaire)
+  // ou « activite » (lieu d'activité sportive, formulaire court)
+  const [tab, setTab] = useState<"detente" | "activite">("detente");
+  const [actName, setActName] = useState("");
+  const [actType, setActType] = useState("football");
+  const [actDistrict, setActDistrict] = useState("");
+  const [actCity, setActCity] = useState("Cotonou");
+  const [actPhone, setActPhone] = useState("");
+  const [actHoraires, setActHoraires] = useState("");
+  const [actDescription, setActDescription] = useState("");
+  const [actLoading, setActLoading] = useState(false);
+  const [actError, setActError] = useState("");
+  const [actSuccess, setActSuccess] = useState(false);
+
+  // Attendre que l'état d'authentification soit chargé avant de rediriger,
+  // sinon un partenaire légitime est éjecté vers /auth/login au premier rendu.
+  useEffect(() => {
+    if (!authLoading && (!isAuthenticated || !isPartner)) {
+      navigate({ to: '/auth/login' });
+    }
+  }, [authLoading, isAuthenticated, isPartner, navigate]);
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+      </div>
+    );
+  }
 
   if (!isAuthenticated || !isPartner) {
-    navigate({ to: '/auth/login' });
-    return null;
+    return (
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
+        <p>Redirection vers la connexion…</p>
+      </div>
+    );
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -147,6 +179,37 @@ function PartnerRequest() {
     setImages(prev => [...prev, ...newImages]);
   };
 
+  // ── Soumission du formulaire court (lieu d'activité) ──────────
+  const handleActivitySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actName.trim()) {
+      setActError("Le nom du lieu est obligatoire");
+      return;
+    }
+    setActLoading(true);
+    setActError("");
+    try {
+      const response = await api.activities.submit({
+        name: actName.trim(),
+        activity: actType,
+        ...(actDescription.trim() ? { description: actDescription.trim() } : {}),
+        ...(actDistrict.trim() ? { district: actDistrict.trim() } : {}),
+        city: actCity,
+        ...(actPhone.trim() ? { phone: actPhone.trim() } : {}),
+        ...(actHoraires.trim() ? { horaires: actHoraires.trim() } : {}),
+      });
+      if (response.success) {
+        setActSuccess(true);
+      } else {
+        setActError(response.message || "Erreur lors de la soumission");
+      }
+    } catch (err: any) {
+      setActError(err.message || "Erreur lors de la soumission de la demande");
+    } finally {
+      setActLoading(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-4xl pb-24">
       <button
@@ -158,11 +221,135 @@ function PartnerRequest() {
         Retour
       </button>
 
-      <h1 className="text-display text-3xl uppercase mb-2">Demander l'ajout d'un lieu</h1>
-      <p className="text-muted-foreground mb-8">
-        Remplissez ce formulaire. L'admin vérifiera puis créera le lieu directement.
+      <h1 className="text-display text-3xl uppercase mb-2">Nouvelle demande</h1>
+      <p className="text-muted-foreground mb-6">
+        Demandez l'ajout d'un lieu. L'admin vérifie votre demande, puis il vous sera demandé de payer les frais de publication.
       </p>
 
+      {/* Onglets : détente (long) / activité (court) */}
+      <div className="flex flex-wrap gap-2 mb-8">
+        <button
+          type="button"
+          onClick={() => setTab("detente")}
+          className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors ${
+            tab === "detente"
+              ? "bg-primary text-white"
+              : "bg-secondary text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Lieu de détente
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("activite")}
+          className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors ${
+            tab === "activite"
+              ? "bg-primary text-white"
+              : "bg-secondary text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Lieu d'activité
+        </button>
+      </div>
+
+      {tab === "activite" && (
+        actSuccess ? (
+          <div className="surface-panel p-8 text-center">
+            <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-400" />
+            <h2 className="text-xl font-semibold mb-2">Demande envoyée !</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              Votre lieu d'activité est en attente de validation par l'admin. Il apparaîtra dans la page Activités après approbation.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate({ to: '/partner' })}
+              className="px-6 py-3 rounded-lg bg-primary text-white font-medium hover:bg-primary/90 transition-colors"
+            >
+              Retour au tableau de bord
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleActivitySubmit} className="space-y-6">
+            <div className="surface-panel p-6 space-y-4">
+              <h2 className="text-lg font-semibold">Informations du lieu d'activité</h2>
+              <div>
+                <label className="label-mono block mb-2">Nom du lieu *</label>
+                <input type="text" required className="w-full px-4 py-3 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary"
+                  value={actName} onChange={(e) => setActName(e.target.value)}
+                  placeholder="Ex : Club de karaté de Fidjrossè" />
+              </div>
+              <div>
+                <label className="label-mono block mb-2">Type d'activité *</label>
+                <select className="w-full px-4 py-3 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary"
+                  value={actType} onChange={(e) => setActType(e.target.value)}>
+                  <option value="football">Football</option>
+                  <option value="boxe">Boxe</option>
+                  <option value="musculation_gym">Musculation & Fitness</option>
+                  <option value="tennis_padel">Tennis & Padel</option>
+                  <option value="natation">Natation</option>
+                  <option value="cyclisme_velo">Cyclisme</option>
+                  <option value="basketball">Basketball</option>
+                  <option value="arts_martiaux">Arts martiaux</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label-mono block mb-2">Quartier</label>
+                  <input type="text" className="w-full px-4 py-3 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary"
+                    value={actDistrict} onChange={(e) => setActDistrict(e.target.value)} />
+                </div>
+                <div>
+                  <label className="label-mono block mb-2">Ville *</label>
+                  <select className="w-full px-4 py-3 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary"
+                    value={actCity} onChange={(e) => setActCity(e.target.value)}>
+                    {CITIES.map(city => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label-mono block mb-2">Téléphone / WhatsApp *</label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <input type="tel" required className="w-full pl-10 pr-4 py-3 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary"
+                      value={actPhone} onChange={(e) => setActPhone(e.target.value)}
+                      placeholder="+229 …" />
+                  </div>
+                </div>
+                <div>
+                  <label className="label-mono block mb-2">Horaires</label>
+                  <input type="text" className="w-full px-4 py-3 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary"
+                    value={actHoraires} onChange={(e) => setActHoraires(e.target.value)}
+                    placeholder="Ex : Lun-Sam 16h-18h" />
+                </div>
+              </div>
+              <div>
+                <label className="label-mono block mb-2">Description</label>
+                <textarea rows={2} className="w-full px-4 py-3 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary"
+                  value={actDescription} onChange={(e) => setActDescription(e.target.value)}
+                  placeholder="Ce que propose votre lieu (forfaits, tarifs, publics…)" />
+              </div>
+            </div>
+
+            {actError && (
+              <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">{actError}</div>
+            )}
+
+            <button
+              type="submit"
+              disabled={actLoading}
+              className="w-full py-4 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <Save className="h-5 w-5" />
+              {actLoading ? "Soumission..." : "Soumettre la demande"}
+            </button>
+          </form>
+        )
+      )}
+
+      {tab === "detente" && (
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* Informations de base */}
         <div className="surface-panel p-6 space-y-4">
@@ -429,6 +616,7 @@ function PartnerRequest() {
           {loading ? "Soumission..." : "Soumettre la demande"}
         </button>
       </form>
+      )}
     </div>
   );
 }

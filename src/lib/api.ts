@@ -122,6 +122,9 @@ export const api = {
     list: (params?: { activity?: string; city?: string; search?: string }) =>
       request(`/api/activities${params ? '?' + new URLSearchParams(params as any).toString() : ''}`),
 
+    myRequests: () =>
+      request('/api/activities/my-requests'),
+
     categories: () =>
       request('/api/activities/categories'),
 
