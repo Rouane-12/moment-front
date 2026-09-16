@@ -173,7 +173,7 @@ export const api = {
     list: (params?: { status?: string; type?: string }) =>
       request(`/api/moments${params ? '?' + new URLSearchParams(params as any).toString() : ''}`),
 
-    createActivity: (data: { activityVenueId: string; date: string; startTime?: string; peopleCount?: number }) =>
+    createActivity: (data: { activityVenueId: string; date: string; startTime?: string; peopleCount?: number; budgetPerPerson?: number }) =>
       request('/api/moments/activity', {
         method: 'POST',
         body: JSON.stringify(data),

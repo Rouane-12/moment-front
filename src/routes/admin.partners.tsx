@@ -39,6 +39,12 @@ function AdminPartners() {
   const [selectedRequest, setSelectedRequest] = useState<VenueRequest | null>(null);
   const [approveAmount, setApproveAmount] = useState("5000");
   const [activityRequests, setActivityRequests] = useState<any[]>([]);
+  const [showAddActivity, setShowAddActivity] = useState(false);
+  const [addingActivity, setAddingActivity] = useState(false);
+  const [newActivity, setNewActivity] = useState({
+    name: '', activity: 'football', address: '', district: '',
+    city: 'Cotonou', phone: '', horaires: '',
+  });
 
   useEffect(() => {
     fetchRequests();
@@ -73,6 +79,29 @@ function AdminPartners() {
       fetchActivityRequests();
     } catch (error) {
       console.error('Failed to reject activity:', error);
+    }
+  };
+
+  const handleAddActivity = async () => {
+    if (!newActivity.name.trim() || !newActivity.activity) return;
+    setAddingActivity(true);
+    try {
+      await api.activities.submit({
+        name: newActivity.name.trim(),
+        activity: newActivity.activity,
+        ...(newActivity.address.trim() ? { address: newActivity.address.trim() } : {}),
+        ...(newActivity.district.trim() ? { district: newActivity.district.trim() } : {}),
+        city: newActivity.city,
+        ...(newActivity.phone.trim() ? { phone: newActivity.phone.trim() } : {}),
+        ...(newActivity.horaires.trim() ? { horaires: newActivity.horaires.trim() } : {}),
+      });
+      setNewActivity({ name: '', activity: 'football', address: '', district: '', city: 'Cotonou', phone: '', horaires: '' });
+      setShowAddActivity(false);
+    } catch (error) {
+      console.error('Failed to add activity:', error);
+      alert('Erreur lors de l\'ajout du lieu d\'activité');
+    } finally {
+      setAddingActivity(false);
     }
   };
 
@@ -252,17 +281,23 @@ function AdminPartners() {
           )}
         </div>
 
-        {/* Lieux d'activités proposés (en attente de validation) */}
+        {/* Lieux d'activités — ajout direct + propositions en attente */}
         <div className="surface-panel p-6 mt-6">
           <div className="flex items-center gap-2 mb-4">
             <Dumbbell className="h-5 w-5 text-primary" />
-            <h2 className="font-semibold">Lieux d'activités proposés</h2>
-            {activityRequests.length > 0 && (
-              <span className="ml-auto px-2 py-1 rounded-full bg-yellow-500/10 text-yellow-500 text-xs font-semibold">
-                {activityRequests.length} en attente
-              </span>
-            )}
+            <h2 className="font-semibold">Lieux d'activités</h2>
+            <button
+              type="button"
+              onClick={() => setShowAddActivity(true)}
+              className="ml-auto flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium"
+            >
+              <PlusCircle className="h-4 w-4" /> Ajouter un lieu
+            </button>
           </div>
+
+          {activityRequests.length > 0 && (
+            <p className="text-xs text-yellow-500 mb-4">{activityRequests.length} proposition(s) en attente de validation :</p>
+          )}
           {activityRequests.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Dumbbell className="h-10 w-10 mx-auto mb-3 opacity-50" />
@@ -310,6 +345,104 @@ function AdminPartners() {
             </div>
           )}
         </div>
+
+        {/* Add activity modal (admin direct add) */}
+        {showAddActivity && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="surface-panel p-6 rounded-lg max-w-md w-full max-h-[85vh] overflow-y-auto">
+              <h2 className="text-xl font-semibold mb-4">Ajouter un lieu d'activité</h2>
+              <p className="text-xs text-muted-foreground mb-4">Le lieu sera publié immédiatement dans la page Activités.</p>
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="text-xs font-semibold">Nom du lieu *</span>
+                  <input
+                    value={newActivity.name}
+                    onChange={(e) => setNewActivity({ ...newActivity, name: e.target.value })}
+                    className="mt-1 w-full px-4 py-2.5 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary text-sm"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold">Type d'activité *</span>
+                  <select
+                    value={newActivity.activity}
+                    onChange={(e) => setNewActivity({ ...newActivity, activity: e.target.value })}
+                    className="mt-1 w-full px-4 py-2.5 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary text-sm"
+                  >
+                    <option value="football">Football</option>
+                    <option value="boxe">Boxe</option>
+                    <option value="musculation_gym">Musculation & Fitness</option>
+                    <option value="tennis_padel">Tennis & Padel</option>
+                    <option value="natation">Natation</option>
+                    <option value="cyclisme_velo">Cyclisme</option>
+                    <option value="basketball">Basketball</option>
+                    <option value="arts_martiaux">Arts martiaux</option>
+                  </select>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-xs font-semibold">Quartier</span>
+                    <input
+                      value={newActivity.district}
+                      onChange={(e) => setNewActivity({ ...newActivity, district: e.target.value })}
+                      className="mt-1 w-full px-4 py-2.5 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary text-sm"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-semibold">Ville</span>
+                    <input
+                      value={newActivity.city}
+                      onChange={(e) => setNewActivity({ ...newActivity, city: e.target.value })}
+                      className="mt-1 w-full px-4 py-2.5 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary text-sm"
+                    />
+                  </label>
+                </div>
+                <label className="block">
+                  <span className="text-xs font-semibold">Adresse</span>
+                  <input
+                    value={newActivity.address}
+                    onChange={(e) => setNewActivity({ ...newActivity, address: e.target.value })}
+                    className="mt-1 w-full px-4 py-2.5 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary text-sm"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold">Téléphone / WhatsApp</span>
+                  <input
+                    value={newActivity.phone}
+                    onChange={(e) => setNewActivity({ ...newActivity, phone: e.target.value })}
+                    placeholder="+229 …"
+                    className="mt-1 w-full px-4 py-2.5 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary text-sm"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold">Horaires</span>
+                  <input
+                    value={newActivity.horaires}
+                    onChange={(e) => setNewActivity({ ...newActivity, horaires: e.target.value })}
+                    placeholder="Ex : Lun-Sam 16h-18h"
+                    className="mt-1 w-full px-4 py-2.5 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary text-sm"
+                  />
+                </label>
+              </div>
+              <div className="flex gap-2 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowAddActivity(false)}
+                  className="flex-1 px-4 py-2.5 rounded-lg border border-border hover:bg-white/5 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddActivity}
+                  disabled={addingActivity || !newActivity.name.trim()}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors font-medium disabled:opacity-50"
+                >
+                  {addingActivity ? 'Ajout…' : 'Ajouter le lieu'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Approve modal with price input */}
         {showApproveModal && selectedRequest && (
