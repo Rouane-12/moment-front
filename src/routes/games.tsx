@@ -463,15 +463,15 @@ function GamesPage() {
         {/* Panneau des règles — obligatoire avant de lancer */}
         {showRules && selectedMode && (
           <div className="fixed inset-0 z-[300] bg-black/70 flex items-center justify-center p-4" onClick={() => setShowRules(null)}>
-            <div className="bg-[#111] border border-white/10 rounded-2xl max-w-md w-full max-h-[85vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+            <div className="bg-[#111] border border-white/10 rounded-2xl max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
                 <div className="flex items-center gap-2">
                   <selectedMode.icon className="h-5 w-5 text-primary" />
                   <h2 className="font-bold text-sm">{selectedMode.name}</h2>
                 </div>
                 <button onClick={() => setShowRules(null)} className="p-1 rounded-lg hover:bg-white/10"><X className="h-4 w-4" /></button>
               </div>
-              <div className="p-4 overflow-y-auto max-h-[calc(85vh-120px)]">
+              <div className="p-4 overflow-y-auto min-h-0 flex-1">
                 <h3 className="text-xs font-semibold text-primary mb-2">Comment jouer</h3>
                 <ul className="space-y-1.5 mb-4">
                   {GAME_RULES[selectedMode.id]?.rules.map((rule, i) => (
@@ -514,7 +514,7 @@ function GamesPage() {
                   </div>
                 )}
               </div>
-              <div className="px-4 py-3 border-t border-white/10">
+              <div className="px-4 py-3 border-t border-white/10 shrink-0">
                 <button
                   onClick={createGame}
                   disabled={selectedPlayers.length + 1 < selectedMode.minPlayers}
