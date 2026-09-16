@@ -153,7 +153,12 @@ function GamesPage() {
     socketRef.current = socket;
     setSocketReady(true);
 
-    socket.on("connect", () => socket.emit("get-online-users"));
+    socket.on("connect", () => {
+      socket.emit("get-online-users");
+      // (Re)connexion : récupère l'état des parties en cours (évite de rester
+      // bloqué sur un état périmé après un creux de connexion ou un refresh).
+      socket.emit("game-sync");
+    });
 
     socket.on("online-users", (data: { userIds: string[] }) => {
       setOnlineUsers(new Set(data.userIds || []));
@@ -1534,11 +1539,10 @@ function SpiraleSession({ game, socketRef, me, nameOf, exitGame }: {
             </div>
             <button
               onClick={() => socketRef.current?.emit("game-move", { gameId: game.id, move: "roll" })}
-              disabled={!myTurn}
               className="flex-1 min-w-0 py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
             >
               <Dices className="h-5 w-5 shrink-0" />
-              <span className="truncate">{myTurn ? "Lancer le dé" : `En attente de ${nameOf(game.turn)}`}</span>
+              <span className="truncate">{myTurn ? "Lancer le dé" : `Lancer le dé — tour de ${nameOf(game.turn)}`}</span>
             </button>
           </div>
 

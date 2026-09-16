@@ -4,7 +4,7 @@ import { AdminRoute } from "@/components/auth/AdminRoute";
 import { api } from "@/lib/api";
 import * as LucideIcons from "lucide-react";
 
-const { Building2, Check, X, User, MapPin, Phone, Coins, PlusCircle } = LucideIcons;
+const { Building2, Check, X, User, MapPin, Phone, Coins, PlusCircle, Dumbbell } = LucideIcons;
 
 export const Route = createFileRoute("/admin/partners")({
   ssr: false,
@@ -38,10 +38,43 @@ function AdminPartners() {
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<VenueRequest | null>(null);
   const [approveAmount, setApproveAmount] = useState("5000");
+  const [activityRequests, setActivityRequests] = useState<any[]>([]);
 
   useEffect(() => {
     fetchRequests();
+    fetchActivityRequests();
   }, [statusFilter]);
+
+  const fetchActivityRequests = async () => {
+    try {
+      const response = await api.activities.pending();
+      if (response.success && response['activities']) {
+        setActivityRequests(response['activities']);
+      }
+    } catch (error) {
+      console.error('Failed to fetch activity requests:', error);
+    }
+  };
+
+  const handleApproveActivity = async (id: string) => {
+    try {
+      await api.activities.approve(id);
+      fetchActivityRequests();
+    } catch (error) {
+      console.error('Failed to approve activity:', error);
+    }
+  };
+
+  const handleRejectActivity = async (id: string) => {
+    const reason = prompt('Raison du refus :');
+    if (!reason) return;
+    try {
+      await api.activities.reject(id, reason);
+      fetchActivityRequests();
+    } catch (error) {
+      console.error('Failed to reject activity:', error);
+    }
+  };
 
   const fetchRequests = async () => {
     try {
@@ -211,6 +244,65 @@ function AdminPartners() {
                           Créer le lieu
                         </button>
                       )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Lieux d'activités proposés (en attente de validation) */}
+        <div className="surface-panel p-6 mt-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Dumbbell className="h-5 w-5 text-primary" />
+            <h2 className="font-semibold">Lieux d'activités proposés</h2>
+            {activityRequests.length > 0 && (
+              <span className="ml-auto px-2 py-1 rounded-full bg-yellow-500/10 text-yellow-500 text-xs font-semibold">
+                {activityRequests.length} en attente
+              </span>
+            )}
+          </div>
+          {activityRequests.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Dumbbell className="h-10 w-10 mx-auto mb-3 opacity-50" />
+              <p className="text-sm">Aucune proposition de lieu d'activité en attente</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {activityRequests.map((a) => (
+                <div key={a._id} className="border border-white/10 rounded-lg p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold">{a.name}</h3>
+                      <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground mt-2">
+                        <span className="capitalize">{a.activity}</span>
+                        {a.district && <span>{a.district}</span>}
+                        <span>{a.city}</span>
+                        {a.phone && <span>{a.phone}</span>}
+                      </div>
+                      {a.submittedBy && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Proposé par {a.submittedBy.firstName} {a.submittedBy.lastName}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleApproveActivity(a._id)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors text-sm font-medium"
+                      >
+                        <Check className="h-4 w-4" /> Approuver
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRejectActivity(a._id)}
+                        className="p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
+                        title="Refuser"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
                     </div>
                   </div>
                 </div>

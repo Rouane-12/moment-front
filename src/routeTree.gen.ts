@@ -10,10 +10,12 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ActivitiesRouteImport } from './routes/activities'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as BookingRouteImport } from './routes/booking'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as ExploreRouteImport } from './routes/explore'
+import { Route as GamesRouteImport } from './routes/games'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as MomentsRouteImport } from './routes/moments'
 import { Route as MyReviewsRouteImport } from './routes/my-reviews'
@@ -36,12 +38,15 @@ import { Route as PartnerProfileRouteImport } from './routes/partner.profile'
 import { Route as PartnerRequestRouteImport } from './routes/partner.request'
 import { Route as VenueIdRouteImport } from './routes/venue.$id'
 import { Route as AdminVenuesAddRouteImport } from './routes/admin.venues.add'
-import { Route as PastContactsRouteImport } from './routes/past-contacts'
-import { Route as GamesRouteImport } from './routes/games'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivitiesRoute = ActivitiesRouteImport.update({
+  id: '/activities',
+  path: '/activities',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -62,6 +67,11 @@ const ChatRoute = ChatRouteImport.update({
 const ExploreRoute = ExploreRouteImport.update({
   id: '/explore',
   path: '/explore',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GamesRoute = GamesRouteImport.update({
+  id: '/games',
+  path: '/games',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HomeRoute = HomeRouteImport.update({
@@ -174,18 +184,15 @@ const AdminVenuesAddRoute = AdminVenuesAddRouteImport.update({
   path: '/venues/add',
   getParentRoute: () => AdminRoute,
 } as any)
-const PastContactsRoute = PastContactsRouteImport.update({
-  id: '/past-contacts',
-  path: '/past-contacts',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/activities': typeof ActivitiesRoute
   '/admin': typeof AdminRouteWithChildren
   '/booking': typeof BookingRoute
   '/chat': typeof ChatRoute
   '/explore': typeof ExploreRoute
+  '/games': typeof GamesRoute
   '/home': typeof HomeRoute
   '/moments': typeof MomentsRoute
   '/my-reviews': typeof MyReviewsRoute
@@ -208,15 +215,15 @@ export interface FileRoutesByFullPath {
   '/partner/request': typeof PartnerRequestRoute
   '/venue/$id': typeof VenueIdRoute
   '/admin/venues/add': typeof AdminVenuesAddRoute
-  '/past-contacts': typeof PastContactsRoute
-  '/games': typeof GamesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/activities': typeof ActivitiesRoute
   '/admin': typeof AdminRouteWithChildren
   '/booking': typeof BookingRoute
   '/chat': typeof ChatRoute
   '/explore': typeof ExploreRoute
+  '/games': typeof GamesRoute
   '/home': typeof HomeRoute
   '/moments': typeof MomentsRoute
   '/my-reviews': typeof MyReviewsRoute
@@ -239,16 +246,16 @@ export interface FileRoutesByTo {
   '/partner/request': typeof PartnerRequestRoute
   '/venue/$id': typeof VenueIdRoute
   '/admin/venues/add': typeof AdminVenuesAddRoute
-  '/past-contacts': typeof PastContactsRoute
-  '/games': typeof GamesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/activities': typeof ActivitiesRoute
   '/admin': typeof AdminRouteWithChildren
   '/booking': typeof BookingRoute
   '/chat': typeof ChatRoute
   '/explore': typeof ExploreRoute
+  '/games': typeof GamesRoute
   '/home': typeof HomeRoute
   '/moments': typeof MomentsRoute
   '/my-reviews': typeof MyReviewsRoute
@@ -271,17 +278,17 @@ export interface FileRoutesById {
   '/partner/request': typeof PartnerRequestRoute
   '/venue/$id': typeof VenueIdRoute
   '/admin/venues/add': typeof AdminVenuesAddRoute
-  '/past-contacts': typeof PastContactsRoute
-  '/games': typeof GamesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/activities'
     | '/admin'
     | '/booking'
     | '/chat'
     | '/explore'
+    | '/games'
     | '/home'
     | '/moments'
     | '/my-reviews'
@@ -304,15 +311,15 @@ export interface FileRouteTypes {
     | '/partner/request'
     | '/venue/$id'
     | '/admin/venues/add'
-    | '/past-contacts'
-    | '/games'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/activities'
     | '/admin'
     | '/booking'
     | '/chat'
     | '/explore'
+    | '/games'
     | '/home'
     | '/moments'
     | '/my-reviews'
@@ -338,10 +345,12 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/activities'
     | '/admin'
     | '/booking'
     | '/chat'
     | '/explore'
+    | '/games'
     | '/home'
     | '/moments'
     | '/my-reviews'
@@ -364,15 +373,16 @@ export interface FileRouteTypes {
     | '/partner/request'
     | '/venue/$id'
     | '/admin/venues/add'
-    | '/past-contacts'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ActivitiesRoute: typeof ActivitiesRoute
   AdminRoute: typeof AdminRouteWithChildren
   BookingRoute: typeof BookingRoute
   ChatRoute: typeof ChatRoute
   ExploreRoute: typeof ExploreRoute
+  GamesRoute: typeof GamesRoute
   HomeRoute: typeof HomeRoute
   MomentsRoute: typeof MomentsRoute
   MyReviewsRoute: typeof MyReviewsRoute
@@ -380,8 +390,6 @@ export interface RootRouteChildren {
   PastContactsRoute: typeof PastContactsRoute
   ProfileRoute: typeof ProfileRoute
   ReportRoute: typeof ReportRoute
-  PastContactsRoute: typeof PastContactsRoute
-  GamesRoute: typeof GamesRoute
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
@@ -390,7 +398,6 @@ export interface RootRouteChildren {
   MomentIdRoute: typeof MomentIdRoute
   MomentCreateRoute: typeof MomentCreateRoute
   VenueIdRoute: typeof VenueIdRoute
-  GamesRoute: typeof GamesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -400,6 +407,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activities': {
+      id: '/activities'
+      path: '/activities'
+      fullPath: '/activities'
+      preLoaderRoute: typeof ActivitiesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -428,6 +442,13 @@ declare module '@tanstack/react-router' {
       path: '/explore'
       fullPath: '/explore'
       preLoaderRoute: typeof ExploreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/games': {
+      id: '/games'
+      path: '/games'
+      fullPath: '/games'
+      preLoaderRoute: typeof GamesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/home': {
@@ -577,20 +598,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VenueIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/past-contacts': {
-      id: '/past-contacts'
-      path: '/past-contacts'
-      fullPath: '/past-contacts'
-      preLoaderRoute: typeof PastContactsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/games': {
-      id: '/games'
-      path: '/games'
-      fullPath: '/games'
-      preLoaderRoute: typeof GamesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/venues/add': {
       id: '/admin/venues/add'
       path: '/venues/add'
@@ -634,10 +641,12 @@ const PartnerRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ActivitiesRoute: ActivitiesRoute,
   AdminRoute: AdminRouteWithChildren,
   BookingRoute: BookingRoute,
   ChatRoute: ChatRoute,
   ExploreRoute: ExploreRoute,
+  GamesRoute: GamesRoute,
   HomeRoute: HomeRoute,
   MomentsRoute: MomentsRoute,
   MyReviewsRoute: MyReviewsRoute,
@@ -653,9 +662,17 @@ const rootRouteChildren: RootRouteChildren = {
   MomentIdRoute: MomentIdRoute,
   MomentCreateRoute: MomentCreateRoute,
   VenueIdRoute: VenueIdRoute,
-  PastContactsRoute: PastContactsRoute,
-  GamesRoute: GamesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

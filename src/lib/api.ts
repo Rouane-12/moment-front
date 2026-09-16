@@ -118,6 +118,38 @@ export const api = {
       }),
   },
 
+  activities: {
+    list: (params?: { activity?: string; city?: string; search?: string }) =>
+      request(`/api/activities${params ? '?' + new URLSearchParams(params as any).toString() : ''}`),
+
+    categories: () =>
+      request('/api/activities/categories'),
+
+    get: (id: string) =>
+      request(`/api/activities/${id}`),
+
+    submit: (data: {
+      name: string; activity: string; description?: string; address?: string;
+      district?: string; city?: string; phone?: string; horaires?: string;
+    }) =>
+      request('/api/activities', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    pending: () =>
+      request('/api/activities/admin/pending'),
+
+    approve: (id: string) =>
+      request(`/api/activities/${id}/approve`, { method: 'PUT' }),
+
+    reject: (id: string, reason: string) =>
+      request(`/api/activities/${id}/reject`, {
+        method: 'PUT',
+        body: JSON.stringify({ reason }),
+      }),
+  },
+
   moments: {
     generate: (data: {
       city: string;
@@ -138,8 +170,14 @@ export const api = {
     get: (id: string) =>
       request(`/api/moments/${id}`),
 
-    list: (params?: { status?: string }) =>
+    list: (params?: { status?: string; type?: string }) =>
       request(`/api/moments${params ? '?' + new URLSearchParams(params as any).toString() : ''}`),
+
+    createActivity: (data: { activityVenueId: string; date: string; startTime?: string; peopleCount?: number }) =>
+      request('/api/moments/activity', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
   },
 
   bookings: {
