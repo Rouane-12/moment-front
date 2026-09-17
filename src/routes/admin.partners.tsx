@@ -21,6 +21,7 @@ type VenueRequest = {
   status: 'pending' | 'approved' | 'rejected' | 'paid' | 'completed';
   paymentStatus: 'pending' | 'paid' | 'failed';
   paymentAmount: number;
+  offers?: Array<{ name: string; price: number }>;
   partnerId: {
     firstName: string;
     lastName: string;   
@@ -315,6 +316,20 @@ function AdminPartners() {
                       {request.rejectedReason && (
                         <div className="mt-4 p-3 bg-red-500/10 rounded-lg text-sm text-red-500">
                           Raison du refus : {request.rejectedReason}
+                        </div>
+                      )}
+
+                      {request.offers && request.offers.length > 0 && (
+                        <div className="mt-4">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Tarifs & services proposés</p>
+                          <div className="flex flex-wrap gap-2">
+                            {request.offers.map((o: { name: string; price: number }, i: number) => (
+                              <span key={i} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary text-sm">
+                                {o.name}
+                                <span className="font-semibold text-primary">{o.price.toLocaleString()} FCFA</span>
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>

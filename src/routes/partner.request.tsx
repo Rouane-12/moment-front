@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import * as LucideIcons from "lucide-react";
 
-const { ArrowLeft, MapPin, Phone, Globe, X, Save, Upload, CheckCircle } = LucideIcons;
+const { ArrowLeft, MapPin, Phone, Globe, X, Save, Upload, CheckCircle, Coins, Plus } = LucideIcons;
 
 const CATEGORIES = [
   'plage', 'food', 'gaming', 'bar', 'cinema', 'concert', 'culture', 'rooftop',
@@ -55,6 +55,10 @@ function PartnerRequest() {
     rating: 0,
     openingHours: DAYS.map(day => ({ day, open: '', close: '', isClosed: false })),
   });
+  // Tarifs & services : chaque prestation a un nom (Normal, Premium, Menu…) et un prix
+  const [offers, setOffers] = useState<Array<{ name: string; price: string }>>([
+    { name: "Normal", price: "" },
+  ]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
@@ -125,6 +129,9 @@ function PartnerRequest() {
         tags: formData.tags,
         openingHours: formData.openingHours.filter(h => !h.isClosed || h.open || h.close),
         rating: formData.rating || 0,
+        offers: offers
+          .filter(o => o.name.trim() && o.price.trim() && !isNaN(Number(o.price)))
+          .map(o => ({ name: o.name.trim(), price: Number(o.price) })),
         images: await Promise.all(images.map(async (img, i) => {
           const base64 = await new Promise<string>((resolve) => {
             const reader = new FileReader();
@@ -485,6 +492,64 @@ function PartnerRequest() {
               </select>
             </div>
           </div>
+        </div>
+
+        {/* Tarifs & services — chaque prestation a un nom et un prix */}
+        <div className="surface-panel p-6 space-y-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Coins className="h-5 w-5 text-primary" />
+            Tarifs & services
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Listez ce que vous proposez et son prix. Ex : « Normal — 2 000 FCFA », « Premium — 5 000 FCFA », « Menu complet — 10 000 FCFA ».
+          </p>
+          <div className="space-y-3">
+            {offers.map((offer, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Nom du service (ex : Premium)"
+                  className="flex-1 px-4 py-3 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary text-sm"
+                  value={offer.name}
+                  onChange={(e) => {
+                    const next = offers.map((o, idx) => idx === i ? { ...o, name: e.target.value } : o);
+                    setOffers(next);
+                  }}
+                />
+                <div className="relative w-44 shrink-0">
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Prix"
+                    className="w-full px-4 py-3 pr-14 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary text-sm"
+                    value={offer.price}
+                    onChange={(e) => {
+                      const next = offers.map((o, idx) => idx === i ? { ...o, price: e.target.value } : o);
+                      setOffers(next);
+                    }}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">FCFA</span>
+                </div>
+                {offers.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setOffers(offers.filter((_, idx) => idx !== i))}
+                    className="p-2.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors shrink-0"
+                    title="Supprimer ce tarif"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setOffers([...offers, { name: "", price: "" }])}
+            className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+          >
+            <Plus className="h-4 w-4" /> Ajouter un tarif
+          </button>
         </div>
 
         {/* Horaires */}
