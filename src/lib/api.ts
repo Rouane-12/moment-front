@@ -134,6 +134,7 @@ export const api = {
     submit: (data: {
       name: string; activity: string; description?: string; address?: string;
       district?: string; city?: string; phone?: string; horaires?: string;
+      priceIndication?: string; whatsapp?: string;
     }) =>
       request('/api/activities', {
         method: 'POST',
@@ -150,6 +151,15 @@ export const api = {
       request(`/api/activities/${id}/reject`, {
         method: 'PUT',
         body: JSON.stringify({ reason }),
+      }),
+
+    activityReviews: (activityVenueId: string) =>
+      request(`/api/reviews/activity/${activityVenueId}`),
+
+    createActivityReview: (data: { activityVenueId: string; rating: number; title: string; comment: string }) =>
+      request('/api/reviews', {
+        method: 'POST',
+        body: JSON.stringify(data),
       }),
   },
 
@@ -180,6 +190,28 @@ export const api = {
       request('/api/moments/activity', {
         method: 'POST',
         body: JSON.stringify(data),
+      }),
+
+    // Frais de mise en relation (moments activité)
+    createLeadFee: (itineraryId: string) =>
+      request(`/api/moments/activity/${itineraryId}/lead-fee`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+
+    verifyLeadFee: (bookingId: string, transactionId: string) =>
+      request(`/api/moments/activity/lead-fee/${bookingId}/verify`, {
+        method: 'POST',
+        body: JSON.stringify({ transactionId }),
+      }),
+
+    leadFeeStatus: (itineraryId: string) =>
+      request(`/api/moments/activity/lead-fee/status/${itineraryId}`),
+
+    whatsappSent: (bookingId: string) =>
+      request(`/api/moments/activity/lead-fee/${bookingId}/whatsapp-sent`, {
+        method: 'POST',
+        body: JSON.stringify({}),
       }),
   },
 

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { formatFcfa } from "@/lib/moment-engine";
 import { api } from "@/lib/api";
 import * as LucideIcons from "lucide-react";
@@ -220,6 +220,51 @@ function MomentResult() {
 
   const isActivite = moment.momentType === "activite";
 
+  // Frais de mise en relation : le WhatsApp d'un moment d'activité n'est
+  // débloqué qu'après paiement (sauf pour les anciens moments créés avant
+  // ce système — leadFeeStatus renvoie alors paid=false et on affiche le
+  // bloc de déblocage, jamais le contact en clair).
+  const [leadPaid, setLeadPaid] = useState<boolean | null>(null); // null = chargement
+  useEffect(() => {
+    if (!isActivite || !moment.id) return;
+    let cancelled = false;
+    api.moments.leadFeeStatus(moment.id)
+      .then((res) => { if (!cancelled) setLeadPaid(!!res["paid"]); })
+      .catch(() => { if (!cancelled) setLeadPaid(false); });
+    return () => { cancelled = true; };
+  }, [isActivite, moment.id]);
+
+  // Nombre de personnes pour calculer le frais (miroir backend : 100/pers, max 1000)
+  const leadFee = Math.min(1000, Math.max(1, moment.params.people || 1) * 100);
+  const payLeadFee = async () => {
+    try {
+      const res = await api.moments.createLeadFee(moment.id);
+      const booking = res["activityBooking"];
+      if (!res.success || !booking?._id) throw new Error(res.message || "Erreur");
+      const { openKkiapayWidget } = window as any;
+      if (!openKkiapayWidget) throw new Error("Module de paiement indisponible");
+      (window as any).addSuccessListener?.((response: any) => {
+        if (response.transactionId && booking._id) {
+          api.moments.verifyLeadFee(String(booking._id), response.transactionId)
+            .then((v) => { if (v.success) setLeadPaid(true); })
+            .catch(() => setLeadPaid(false));
+        }
+      });
+      openKkiapayWidget({
+        amount: leadFee,
+        key: import.meta.env["VITE_KKIAPAY_PUBLIC_KEY"] || "",
+        sandbox: true,
+        position: "center",
+        theme: "#F5A623",
+        data: "",
+        name: "MOMENT — Frais de mise en relation",
+        callback: "",
+      });
+    } catch (e: any) {
+      alert(e.message || "Impossible de démarrer le paiement");
+    }
+  };
+
   return (
     <div className="min-h-screen">
       {/* HERO */}
@@ -317,19 +362,36 @@ function MomentResult() {
                           {formatFcfa(moment.total)}
                         </p>
                         <div className="mt-3 flex flex-wrap gap-3">
-                          <a
-                            href={waNumber ? `https://wa.me/${waNumber}?text=${waText}` : undefined}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
-                              waNumber
-                                ? "bg-green-600 text-white hover:bg-green-500"
-                                : "pointer-events-none opacity-40 bg-secondary"
-                            }`}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            Réserver via WhatsApp
-                          </a>
+                          {leadPaid ? (
+                            <a
+                              href={waNumber ? `https://wa.me/${waNumber}?text=${waText}` : undefined}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
+                                waNumber
+                                  ? "bg-green-600 text-white hover:bg-green-500"
+                                  : "pointer-events-none opacity-40 bg-secondary"
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (moment.id) api.moments.whatsappSent(moment.id).catch(() => {});
+                              }}
+                            >
+                              Réserver via WhatsApp
+                            </a>
+                          ) : leadPaid === null ? (
+                            <span className="inline-flex items-center gap-2 rounded-full bg-secondary px-4 py-2 text-xs font-semibold text-muted-foreground">
+                              Vérification…
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); payLeadFee(); }}
+                              className="inline-flex items-center gap-2 rounded-full bg-green-600/50 px-4 py-2 text-xs font-semibold text-white/90 hover:bg-green-600/70 transition-colors"
+                            >
+                              Débloquer WhatsApp — {leadFee.toLocaleString()} FCFA
+                            </button>
+                          )}
                           <a
                             href={mapsUrl}
                             target="_blank"

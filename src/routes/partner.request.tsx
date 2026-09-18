@@ -71,6 +71,7 @@ function PartnerRequest() {
   const [actCity, setActCity] = useState("Cotonou");
   const [actPhone, setActPhone] = useState("");
   const [actHoraires, setActHoraires] = useState("");
+  const [actPriceIndication, setActPriceIndication] = useState("");
   const [actDescription, setActDescription] = useState("");
   const [actLoading, setActLoading] = useState(false);
   const [actError, setActError] = useState("");
@@ -204,6 +205,7 @@ function PartnerRequest() {
         city: actCity,
         ...(actPhone.trim() ? { phone: actPhone.trim() } : {}),
         ...(actHoraires.trim() ? { horaires: actHoraires.trim() } : {}),
+        ...(actPriceIndication.trim() ? { priceIndication: actPriceIndication.trim() } : {}),
       });
       if (response.success) {
         setActSuccess(true);
@@ -331,6 +333,12 @@ function PartnerRequest() {
                     value={actHoraires} onChange={(e) => setActHoraires(e.target.value)}
                     placeholder="Ex : Lun-Sam 16h-18h" />
                 </div>
+              </div>
+              <div>
+                <label className="label-mono block mb-2">Indication de prix</label>
+                <input type="text" className="w-full px-4 py-3 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary"
+                  value={actPriceIndication} onChange={(e) => setActPriceIndication(e.target.value)}
+                  placeholder="Ex : à partir de 2 000 FCFA/séance · Abonnement mensuel 10 000 FCFA" />
               </div>
               <div>
                 <label className="label-mono block mb-2">Description</label>

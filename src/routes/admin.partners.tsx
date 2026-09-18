@@ -44,7 +44,7 @@ function AdminPartners() {
   const [addingActivity, setAddingActivity] = useState(false);
   const [newActivity, setNewActivity] = useState({
     name: '', activity: 'football', address: '', district: '',
-    city: 'Cotonou', phone: '', horaires: '',
+    city: 'Cotonou', phone: '', horaires: '', priceIndication: '',
   });
   // Onglet : demandes de lieux de détente / lieux d'activité
   const [tab, setTab] = useState<"detente" | "activite">("detente");
@@ -97,8 +97,9 @@ function AdminPartners() {
         city: newActivity.city,
         ...(newActivity.phone.trim() ? { phone: newActivity.phone.trim() } : {}),
         ...(newActivity.horaires.trim() ? { horaires: newActivity.horaires.trim() } : {}),
+        ...(newActivity.priceIndication.trim() ? { priceIndication: newActivity.priceIndication.trim() } : {}),
       });
-      setNewActivity({ name: '', activity: 'football', address: '', district: '', city: 'Cotonou', phone: '', horaires: '' });
+      setNewActivity({ name: '', activity: 'football', address: '', district: '', city: 'Cotonou', phone: '', horaires: '', priceIndication: '' });
       setShowAddActivity(false);
     } catch (error) {
       console.error('Failed to add activity:', error);
@@ -454,6 +455,15 @@ function AdminPartners() {
                     value={newActivity.horaires}
                     onChange={(e) => setNewActivity({ ...newActivity, horaires: e.target.value })}
                     placeholder="Ex : Lun-Sam 16h-18h"
+                    className="mt-1 w-full px-4 py-2.5 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary text-sm"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold">Indication de prix</span>
+                  <input
+                    value={newActivity.priceIndication}
+                    onChange={(e) => setNewActivity({ ...newActivity, priceIndication: e.target.value })}
+                    placeholder="Ex : à partir de 2 000 FCFA/séance"
                     className="mt-1 w-full px-4 py-2.5 bg-black/50 border border-white/10 rounded-lg focus:outline-none focus:border-primary text-sm"
                   />
                 </label>

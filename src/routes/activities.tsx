@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { SiteNav } from "@/components/moment/SiteNav";
+import { KkiapayWidget } from "@/components/KkiapayWidget";
 import { api } from "@/lib/api";
 import * as LucideIcons from "lucide-react";
 
@@ -9,6 +10,7 @@ const {
   Trophy, Swords, Dumbbell, CircleDot, Waves, Bike, Volleyball, Shield,
   X, MapPin, Phone, Clock, ExternalLink, Calendar, Plus, Search, Check,
   Loader2, ArrowLeft, ChevronRight, MessageCircle, Sparkles, Users, Wallet,
+  Star,
 } = LucideIcons;
 
 export const Route = createFileRoute("/activities")({
@@ -33,6 +35,9 @@ type ActivityVenue = {
   phone?: string;
   whatsapp?: string;
   horaires?: string;
+  priceIndication?: string;
+  rating?: number;
+  reviewCount?: number;
   googleMapsUrl?: string;
 };
 
@@ -269,6 +274,134 @@ function VenueList({ category, venues, onBack }: {
   );
 }
 
+// ── Avis d'un lieu d'activité ──────────────────────────────
+function ActivityReviewSection({ venue }: { venue: ActivityVenue }) {
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [rating, setRating] = useState(5);
+  const [title, setTitle] = useState("");
+  const [comment, setComment] = useState("");
+  const [sending, setSending] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const load = async () => {
+    try {
+      const res = await api.activities.activityReviews(venue._id);
+      if (res.success) setReviews(res["reviews"] || []);
+    } catch { /* silencieux */ }
+    setLoaded(true);
+  };
+
+  useEffect(() => { load(); }, [venue._id]);
+
+  const submit = async () => {
+    if (!title.trim() || !comment.trim()) {
+      setMsg("Titre et commentaire obligatoires");
+      return;
+    }
+    setSending(true);
+    setMsg("");
+    try {
+      const res = await api.activities.createActivityReview({
+        activityVenueId: venue._id,
+        rating,
+        title: title.trim(),
+        comment: comment.trim(),
+      });
+      if (res.success) {
+        setShowForm(false);
+        setTitle("");
+        setComment("");
+        load();
+      } else {
+        setMsg(res.message || "Erreur lors de l'envoi");
+      }
+    } catch (e: any) {
+      setMsg(e.message || "Erreur lors de l'envoi");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const avg = venue.rating || 0;
+  const count = venue.reviewCount || reviews.length;
+
+  return (
+    <div className="mt-5 border-t border-border pt-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Star className="h-4 w-4 text-yellow-400" />
+          <p className="text-sm font-semibold">
+            {count > 0 ? `${avg.toFixed(1)} · ${count} avis` : "Aucun avis"}
+          </p>
+        </div>
+        {!showForm && (
+          <button onClick={() => setShowForm(true)} className="text-xs font-semibold text-primary hover:underline">
+            Laisser un avis
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="rounded-xl border border-border bg-surface p-3 space-y-2">
+          <div className="flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button key={n} type="button" onClick={() => setRating(n)}>
+                <Star className={`h-5 w-5 ${n <= rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`} />
+              </button>
+            ))}
+          </div>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Titre (ex : Super ambiance)"
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs outline-none focus:border-primary"
+          />
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="Ton expérience…"
+            rows={3}
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs outline-none focus:border-primary resize-none"
+          />
+          {msg && <p className="text-[11px] text-red-400">{msg}</p>}
+          <div className="flex gap-2">
+            <button onClick={submit} disabled={sending}
+              className="flex-1 rounded-lg bg-primary py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+              {sending ? "Envoi…" : "Publier mon avis"}
+            </button>
+            <button onClick={() => setShowForm(false)} className="rounded-lg border border-border px-3 py-2 text-xs hover:bg-secondary">
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loaded && reviews.length > 0 && (
+        <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+          {reviews.map((r) => (
+            <div key={r._id} className="rounded-xl border border-border bg-surface p-2.5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold truncate">
+                  {r.user?.firstName || "Utilisateur"} {r.user?.lastName || ""}
+                </p>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <Star key={n} className={`h-3 w-3 ${n <= r.rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/40"}`} />
+                  ))}
+                </div>
+              </div>
+              <p className="text-xs font-medium mt-0.5">{r.title}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{r.comment}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Fiche lieu + réservation WhatsApp directe ─────────────────
 function VenueDetail({ venue, onClose }: { venue: ActivityVenue; onClose: () => void }) {
   const meta = ACTIVITY_META[venue.activity] || { label: venue.activity, icon: Trophy, desc: "", color: "" };
@@ -322,6 +455,11 @@ function VenueDetail({ venue, onClose }: { venue: ActivityVenue; onClose: () => 
                 <Clock className="h-3.5 w-3.5 shrink-0" /> {venue.horaires}
               </p>
             )}
+            {venue.priceIndication && (
+              <p className="flex items-center gap-2 text-xs font-medium text-primary">
+                <Wallet className="h-3.5 w-3.5 shrink-0" /> {venue.priceIndication}
+              </p>
+            )}
           </div>
 
           <div className="mt-5 space-y-2">
@@ -346,6 +484,8 @@ function VenueDetail({ venue, onClose }: { venue: ActivityVenue; onClose: () => 
               </a>
             )}
           </div>
+
+          <ActivityReviewSection venue={venue} />
         </div>
       </div>
     </div>
@@ -353,12 +493,13 @@ function VenueDetail({ venue, onClose }: { venue: ActivityVenue; onClose: () => 
 }
 
 // ── Assistant « Créer un moment activité » ────────────────────
-// 4 étapes : catégorie → lieu → date/heure & personnes → budget, puis résultat.
+// Étapes : catégorie → lieu → date/heure & personnes → budget → PAIEMENT du
+// frais de mise en relation → résultat (WhatsApp débloqué).
 function ActivityWizard({ venues, category, onClose }: {
   venues: ActivityVenue[]; category: string | null; onClose: () => void;
 }) {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0); // 0 cat, 1 lieu, 2 date/pers, 3 budget, 4 résultat
+  const [step, setStep] = useState(0); // 0 cat, 1 lieu, 2 date/pers, 3 budget, 4 paiement, 5 résultat
   const [cat, setCat] = useState<string | null>(category);
   const [venueId, setVenueId] = useState<string | null>(null);
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0] || "");
@@ -368,12 +509,17 @@ function ActivityWizard({ venues, category, onClose }: {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
+  // Frais de mise en relation : 100 FCFA/personne plafonné à 1 000 (miroir du backend)
+  const leadFee = Math.min(1000, Math.max(1, people) * 100);
+  const [leadBookingId, setLeadBookingId] = useState<string | null>(null);
+  const [leadPaid, setLeadPaid] = useState(false);
+  const [payError, setPayError] = useState("");
 
   const filtered = cat ? venues.filter((v) => v.activity === cat) : [];
   const venue = venues.find((v) => v._id === venueId);
   const catMeta = cat ? ACTIVITY_META[cat] : null;
 
-  const next = () => setStep((s) => Math.min(4, s + 1));
+  const next = () => setStep((s) => Math.min(5, s + 1));
   const back = () => setStep((s) => Math.max(0, s - 1));
 
   const confirm = async () => {
@@ -390,6 +536,15 @@ function ActivityWizard({ venues, category, onClose }: {
       });
       if (res.success && res["moment"]?.id) {
         setCreated({ id: String(res["moment"].id), name: venue.name });
+        // Le moment peut déjà être payé (revanche sur un moment existant)
+        try {
+          const st = await api.moments.leadFeeStatus(String(res["moment"].id));
+          if (st.success && st["paid"]) {
+            setLeadPaid(true);
+            setStep(5);
+            return;
+          }
+        } catch { /* statut indisponible : on passe par l'écran de paiement */ }
         setStep(4);
       } else {
         setError(res.message || "Erreur lors de la création");
@@ -401,6 +556,38 @@ function ActivityWizard({ venues, category, onClose }: {
     }
   };
 
+  // Étape paiement : créer l'ActivityBooking puis payer via Kkiapay
+  const startLeadPayment = async () => {
+    if (!created) return;
+    setPayError("");
+    try {
+      const res = await api.moments.createLeadFee(created.id);
+      const booking = res["activityBooking"];
+      if (res.success && booking?._id) {
+        setLeadBookingId(String(booking._id));
+      } else {
+        setPayError(res.message || "Impossible d'initialiser le paiement");
+      }
+    } catch (e: any) {
+      setPayError(e.message || "Impossible d'initialiser le paiement");
+    }
+  };
+
+  const onLeadPaymentSuccess = async (transactionId: string) => {
+    if (!leadBookingId) return;
+    try {
+      const res = await api.moments.verifyLeadFee(leadBookingId, transactionId);
+      if (res.success) {
+        setLeadPaid(true);
+        setStep(5);
+      } else {
+        setPayError(res.message || "Paiement non confirmé");
+      }
+    } catch (e: any) {
+      setPayError(e.message || "Paiement non confirmé");
+    }
+  };
+
   const waNumber = venue ? ((venue.whatsapp || venue.phone || "").replace(/[^\d]/g, "")) : "";
   const waText = venue
     ? encodeURIComponent(
@@ -408,6 +595,11 @@ function ActivityWizard({ venues, category, onClose }: {
       )
     : "";
   const waLink = waNumber ? `https://wa.me/${waNumber}?text=${waText}` : null;
+
+  // Trace l'envoi WhatsApp (politique de remboursement : preuve de mise en relation)
+  const openWhatsApp = () => {
+    if (leadBookingId) api.moments.whatsappSent(leadBookingId).catch(() => {});
+  };
 
   return (
     <div className="fixed inset-0 z-[300] bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
@@ -516,13 +708,13 @@ function ActivityWizard({ venues, category, onClose }: {
             </>
           )}
 
-          {/* Étape 3 : budget */}
+          {/* Étape 3 : budget indicatif */}
           {step === 3 && (
             <>
               <button onClick={back} className="mb-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="h-3.5 w-3.5" /> Retour
               </button>
-              <p className="text-xs font-semibold text-primary mb-3">Ton budget par personne</p>
+              <p className="text-xs font-semibold text-primary mb-3">Budget indicatif par personne</p>
               <div className="flex items-center gap-3">
                 <Wallet className="h-5 w-5 text-primary shrink-0" />
                 <input
@@ -532,8 +724,8 @@ function ActivityWizard({ venues, category, onClose }: {
                 />
               </div>
               <p className="mt-2 text-center text-2xl font-black">{budget.toLocaleString()} <span className="text-sm text-muted-foreground">FCFA / pers.</span></p>
-              <p className="mt-1 text-center text-xs text-muted-foreground">
-                Total : {(budget * people).toLocaleString()} FCFA pour {people} personne(s)
+              <p className="mt-1 text-center text-[11px] text-muted-foreground">
+                À titre informatif pour le partenaire — le prix réel se confirme directement avec lui.
               </p>
 
               {/* Récapitulatif */}
@@ -555,8 +747,70 @@ function ActivityWizard({ venues, category, onClose }: {
             </>
           )}
 
-          {/* Étape 4 : résultat + réservation */}
+          {/* Étape 4 : paiement du frais de mise en relation */}
           {step === 4 && created && (
+            <>
+              <div className="text-center py-1">
+                <p className="font-bold">Débloque le contact du lieu</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Frais de mise en relation et d'organisation — il rémunère la
+                  génération de ton moment et le message pré-rempli, pas la
+                  réservation elle-même (à confirmer avec le partenaire).
+                </p>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-center">
+                <p className="text-xs text-muted-foreground">Frais de mise en relation</p>
+                <p className="text-display text-3xl font-black text-primary mt-1">{leadFee.toLocaleString()} FCFA</p>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  {people} personne(s) · 100 FCFA / personne (max 1 000 FCFA)
+                </p>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-border bg-surface p-3 text-[11px] text-muted-foreground space-y-1">
+                <p>· Le lieu apparaît dans « Mes moments » dès maintenant.</p>
+                <p>· Si le partenaire ne répond pas, tu peux demander un remboursement.</p>
+              </div>
+
+              {payError && <p className="mt-2 text-xs text-red-400">{payError}</p>}
+
+              {leadBookingId ? (
+                <KkiapayWidget
+                  amount={leadFee}
+                  sandbox={true}
+                  onSuccess={onLeadPaymentSuccess}
+                  onFailure={(err) => setPayError("Le paiement a échoué. Réessaie.")}
+                  onClose={() => {}}
+                />
+              ) : (
+                <button onClick={startLeadPayment}
+                  className="mt-4 w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors">
+                  Payer et débloquer WhatsApp
+                </button>
+              )}
+
+              {/* Le moment existe quand même — le client peut payer plus tard */}
+              <button
+                onClick={() => {
+                  navigate({
+                    to: "/moment/$id",
+                    params: { id: created.id },
+                    search: {
+                      city: venue?.city || "Cotonou", people, budget,
+                      when: date, start: time, vibes: "activite",
+                      transport: "peu_importe", roll: 0, variant: 0,
+                    },
+                  });
+                }}
+                className="mt-3 w-full py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Plus tard — voir mon moment
+              </button>
+            </>
+          )}
+
+          {/* Étape 5 : résultat + réservation */}
+          {step === 5 && created && (
             <div className="text-center py-2">
               <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-green-500/15">
                 <Check className="h-7 w-7 text-green-400" />
@@ -574,11 +828,17 @@ function ActivityWizard({ venues, category, onClose }: {
               </div>
 
               <div className="mt-4 space-y-2">
-                {waLink && (
-                  <a href={waLink} target="_blank" rel="noreferrer"
+                {waLink && leadPaid && (
+                  <a href={waLink} target="_blank" rel="noreferrer" onClick={openWhatsApp}
                     className="flex items-center justify-center gap-2 w-full rounded-xl bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-500 transition-colors">
                     <MessageCircle className="h-4 w-4" /> Réserver via WhatsApp
                   </a>
+                )}
+                {waLink && !leadPaid && (
+                  <button onClick={() => setStep(4)}
+                    className="flex items-center justify-center gap-2 w-full rounded-xl bg-green-600/40 py-3 text-sm font-semibold text-white/80 transition-colors">
+                    <MessageCircle className="h-4 w-4" /> WhatsApp — paye les frais pour débloquer
+                  </button>
                 )}
                 <button
                   onClick={() => {
