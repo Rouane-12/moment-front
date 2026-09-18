@@ -691,7 +691,6 @@ function CreateMoment() {
                     </div>
                     <KkiapayWidget
                         amount={200}
-                        sandbox={true}
                         onSuccess={(transactionId) => {
                           console.log("Moment payment success:", transactionId);
                           setRolling(false);

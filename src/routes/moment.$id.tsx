@@ -253,7 +253,7 @@ function MomentResult() {
       openKkiapayWidget({
         amount: leadFee,
         key: import.meta.env["VITE_KKIAPAY_PUBLIC_KEY"] || "",
-        sandbox: true,
+        sandbox: !import.meta.env.PROD,
         position: "center",
         theme: "#F5A623",
         data: "",

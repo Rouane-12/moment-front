@@ -94,6 +94,12 @@ export const api = {
     get: (id: string) =>
       request(`/api/venues/${id}`),
 
+    adminAll: (params?: { search?: string; category?: string; city?: string }) =>
+      request(`/api/venues/admin/all${params ? '?' + new URLSearchParams(params as any).toString() : ''}`),
+
+    mine: () =>
+      request('/api/venues/mine'),
+
     create: (data: any) =>
       request('/api/venues', {
         method: 'POST',
@@ -124,6 +130,15 @@ export const api = {
 
     myRequests: () =>
       request('/api/activities/my-requests'),
+
+    update: (id: string, data: any) =>
+      request(`/api/activities/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+
+    remove: (id: string) =>
+      request(`/api/activities/${id}`, { method: 'DELETE' }),
 
     categories: () =>
       request('/api/activities/categories'),

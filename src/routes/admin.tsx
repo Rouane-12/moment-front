@@ -91,8 +91,9 @@ function AdminStats() {
   ];
 
   const quickLinks = [
-    { to: "/admin/users", icon: Users, label: "Utilisateurs", desc: "Liste, activer/désactiver" },
+    { to: "/admin/venues", icon: MapPin, label: "Tous les lieux", desc: "Liste complète — modifier, supprimer" },
     { to: "/admin/venues/add", icon: MapPin, label: "Ajouter un lieu", desc: "Créer un nouveau lieu" },
+    { to: "/admin/users", icon: Users, label: "Utilisateurs", desc: "Liste, activer/désactiver" },
     { to: "/admin/partners", icon: Building2, label: "Demandes partenaires", desc: "Valider les demandes" },
     { to: "/admin/reports", icon: AlertTriangle, label: "Signalements", desc: "Gérer les signalements" },
   ];

@@ -20,8 +20,10 @@ export function KkiapayWidget({
   onSuccess,
   onFailure,
   onClose,
-  sandbox = true,
+  sandbox,
 }: KkiapayWidgetProps) {
+  // Par défaut : sandbox en dev, paiements réels en production.
+  const isSandbox = sandbox ?? !import.meta.env.PROD;
   const widgetRef = useRef<HTMLDivElement>(null);
   const scriptLoaded = useRef(false);
 
@@ -61,7 +63,7 @@ export function KkiapayWidget({
       window.openKkiapayWidget({
         amount: amount,
         key: import.meta.env['VITE_KKIAPAY_PUBLIC_KEY'] || '',
-        sandbox: sandbox,
+        sandbox: isSandbox,
         position: 'center',
         theme: '#F5A623',
         data: '',

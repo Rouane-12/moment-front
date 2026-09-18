@@ -139,13 +139,22 @@ function PartnerDashboard() {
       <div className="surface-panel p-6 mb-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold">Mes demandes</h2>
-          <a
-            href="/partner/request"
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Nouvelle demande
-          </a>
+          <div className="flex gap-2">
+            <a
+              href="/partner/venues"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary hover:bg-secondary/70 transition-colors"
+            >
+              <MapPin className="h-4 w-4" />
+              Mes lieux
+            </a>
+            <a
+              href="/partner/request"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Nouvelle demande
+            </a>
+          </div>
         </div>
 
         {/* Demandes de lieux d'activité */}
@@ -278,7 +287,6 @@ function PartnerDashboard() {
             </div>
             <KkiapayWidget
               amount={selectedRequest.paymentAmount}
-              sandbox={true}
               onSuccess={handlePaymentSuccess}
               onFailure={(error) => {
                 console.error('Paiement échoué:', error);

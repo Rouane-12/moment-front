@@ -580,9 +580,25 @@ function ActivityWizard({ venues, category, onClose }: {
       if (res.success) {
         setLeadPaid(true);
         setStep(5);
-      } else {
-        setPayError(res.message || "Paiement non confirmé");
+        return;
       }
+      // Vérification Kkiapay encore en cours : on relance le statut quelques fois.
+      if (res["pendingVerification"]) {
+        setPayError("Paiement reçu — vérification en cours…");
+        for (let i = 0; i < 3; i++) {
+          await new Promise((r) => setTimeout(r, 2500));
+          const status = await api.moments.leadFeeStatus(created?.id || "").catch(() => null);
+          if (status?.["paid"]) {
+            setLeadPaid(true);
+            setStep(5);
+            setPayError("");
+            return;
+          }
+        }
+        setPayError("La vérification prend plus de temps que prévu. Ton moment est dans « Mes moments » — le bouton WhatsApp se débloquera dès la confirmation.");
+        return;
+      }
+      setPayError(res.message || "Paiement non confirmé");
     } catch (e: any) {
       setPayError(e.message || "Paiement non confirmé");
     }
@@ -777,7 +793,6 @@ function ActivityWizard({ venues, category, onClose }: {
               {leadBookingId ? (
                 <KkiapayWidget
                   amount={leadFee}
-                  sandbox={true}
                   onSuccess={onLeadPaymentSuccess}
                   onFailure={(err) => setPayError("Le paiement a échoué. Réessaie.")}
                   onClose={() => {}}

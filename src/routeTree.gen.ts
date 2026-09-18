@@ -27,6 +27,7 @@ import { Route as AdminPartnersRouteImport } from './routes/admin.partners'
 import { Route as AdminProfileRouteImport } from './routes/admin.profile'
 import { Route as AdminReportsRouteImport } from './routes/admin.reports'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as AdminVenuesRouteImport } from './routes/admin.venues'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth.forgot-password'
 import { Route as AuthLoginRouteImport } from './routes/auth.login'
 import { Route as AuthRegisterRouteImport } from './routes/auth.register'
@@ -36,6 +37,7 @@ import { Route as MomentIdRouteImport } from './routes/moment.$id'
 import { Route as MomentCreateRouteImport } from './routes/moment.create'
 import { Route as PartnerProfileRouteImport } from './routes/partner.profile'
 import { Route as PartnerRequestRouteImport } from './routes/partner.request'
+import { Route as PartnerVenuesRouteImport } from './routes/partner.venues'
 import { Route as VenueIdRouteImport } from './routes/venue.$id'
 import { Route as AdminVenuesAddRouteImport } from './routes/admin.venues.add'
 
@@ -129,6 +131,11 @@ const AdminUsersRoute = AdminUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminVenuesRoute = AdminVenuesRouteImport.update({
+  id: '/venues',
+  path: '/venues',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
   id: '/auth/forgot-password',
   path: '/auth/forgot-password',
@@ -174,15 +181,20 @@ const PartnerRequestRoute = PartnerRequestRouteImport.update({
   path: '/request',
   getParentRoute: () => PartnerRoute,
 } as any)
+const PartnerVenuesRoute = PartnerVenuesRouteImport.update({
+  id: '/venues',
+  path: '/venues',
+  getParentRoute: () => PartnerRoute,
+} as any)
 const VenueIdRoute = VenueIdRouteImport.update({
   id: '/venue/$id',
   path: '/venue/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminVenuesAddRoute = AdminVenuesAddRouteImport.update({
-  id: '/venues/add',
-  path: '/venues/add',
-  getParentRoute: () => AdminRoute,
+  id: '/add',
+  path: '/add',
+  getParentRoute: () => AdminVenuesRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -204,6 +216,7 @@ export interface FileRoutesByFullPath {
   '/admin/profile': typeof AdminProfileRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/admin/venues': typeof AdminVenuesRouteWithChildren
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
@@ -213,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/moment/create': typeof MomentCreateRoute
   '/partner/profile': typeof PartnerProfileRoute
   '/partner/request': typeof PartnerRequestRoute
+  '/partner/venues': typeof PartnerVenuesRoute
   '/venue/$id': typeof VenueIdRoute
   '/admin/venues/add': typeof AdminVenuesAddRoute
 }
@@ -235,6 +249,7 @@ export interface FileRoutesByTo {
   '/admin/profile': typeof AdminProfileRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/admin/venues': typeof AdminVenuesRouteWithChildren
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
@@ -244,6 +259,7 @@ export interface FileRoutesByTo {
   '/moment/create': typeof MomentCreateRoute
   '/partner/profile': typeof PartnerProfileRoute
   '/partner/request': typeof PartnerRequestRoute
+  '/partner/venues': typeof PartnerVenuesRoute
   '/venue/$id': typeof VenueIdRoute
   '/admin/venues/add': typeof AdminVenuesAddRoute
 }
@@ -267,6 +283,7 @@ export interface FileRoutesById {
   '/admin/profile': typeof AdminProfileRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/admin/venues': typeof AdminVenuesRouteWithChildren
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
@@ -276,6 +293,7 @@ export interface FileRoutesById {
   '/moment/create': typeof MomentCreateRoute
   '/partner/profile': typeof PartnerProfileRoute
   '/partner/request': typeof PartnerRequestRoute
+  '/partner/venues': typeof PartnerVenuesRoute
   '/venue/$id': typeof VenueIdRoute
   '/admin/venues/add': typeof AdminVenuesAddRoute
 }
@@ -300,6 +318,7 @@ export interface FileRouteTypes {
     | '/admin/profile'
     | '/admin/reports'
     | '/admin/users'
+    | '/admin/venues'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
@@ -309,6 +328,7 @@ export interface FileRouteTypes {
     | '/moment/create'
     | '/partner/profile'
     | '/partner/request'
+    | '/partner/venues'
     | '/venue/$id'
     | '/admin/venues/add'
   fileRoutesByTo: FileRoutesByTo
@@ -331,6 +351,7 @@ export interface FileRouteTypes {
     | '/admin/profile'
     | '/admin/reports'
     | '/admin/users'
+    | '/admin/venues'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
@@ -340,6 +361,7 @@ export interface FileRouteTypes {
     | '/moment/create'
     | '/partner/profile'
     | '/partner/request'
+    | '/partner/venues'
     | '/venue/$id'
     | '/admin/venues/add'
   id:
@@ -362,6 +384,7 @@ export interface FileRouteTypes {
     | '/admin/profile'
     | '/admin/reports'
     | '/admin/users'
+    | '/admin/venues'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
@@ -371,6 +394,7 @@ export interface FileRouteTypes {
     | '/moment/create'
     | '/partner/profile'
     | '/partner/request'
+    | '/partner/venues'
     | '/venue/$id'
     | '/admin/venues/add'
   fileRoutesById: FileRoutesById
@@ -528,6 +552,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsersRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/venues': {
+      id: '/admin/venues'
+      path: '/venues'
+      fullPath: '/admin/venues'
+      preLoaderRoute: typeof AdminVenuesRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/auth/forgot-password': {
       id: '/auth/forgot-password'
       path: '/auth/forgot-password'
@@ -591,6 +622,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PartnerRequestRouteImport
       parentRoute: typeof PartnerRoute
     }
+    '/partner/venues': {
+      id: '/partner/venues'
+      path: '/venues'
+      fullPath: '/partner/venues'
+      preLoaderRoute: typeof PartnerVenuesRouteImport
+      parentRoute: typeof PartnerRoute
+    }
     '/venue/$id': {
       id: '/venue/$id'
       path: '/venue/$id'
@@ -600,20 +638,32 @@ declare module '@tanstack/react-router' {
     }
     '/admin/venues/add': {
       id: '/admin/venues/add'
-      path: '/venues/add'
+      path: '/add'
       fullPath: '/admin/venues/add'
       preLoaderRoute: typeof AdminVenuesAddRouteImport
-      parentRoute: typeof AdminRoute
+      parentRoute: typeof AdminVenuesRoute
     }
   }
 }
+
+interface AdminVenuesRouteChildren {
+  AdminVenuesAddRoute: typeof AdminVenuesAddRoute
+}
+
+const AdminVenuesRouteChildren: AdminVenuesRouteChildren = {
+  AdminVenuesAddRoute: AdminVenuesAddRoute,
+}
+
+const AdminVenuesRouteWithChildren = AdminVenuesRoute._addFileChildren(
+  AdminVenuesRouteChildren,
+)
 
 interface AdminRouteChildren {
   AdminPartnersRoute: typeof AdminPartnersRoute
   AdminProfileRoute: typeof AdminProfileRoute
   AdminReportsRoute: typeof AdminReportsRoute
   AdminUsersRoute: typeof AdminUsersRoute
-  AdminVenuesAddRoute: typeof AdminVenuesAddRoute
+  AdminVenuesRoute: typeof AdminVenuesRouteWithChildren
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
@@ -621,7 +671,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminProfileRoute: AdminProfileRoute,
   AdminReportsRoute: AdminReportsRoute,
   AdminUsersRoute: AdminUsersRoute,
-  AdminVenuesAddRoute: AdminVenuesAddRoute,
+  AdminVenuesRoute: AdminVenuesRouteWithChildren,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
@@ -629,11 +679,13 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 interface PartnerRouteChildren {
   PartnerProfileRoute: typeof PartnerProfileRoute
   PartnerRequestRoute: typeof PartnerRequestRoute
+  PartnerVenuesRoute: typeof PartnerVenuesRoute
 }
 
 const PartnerRouteChildren: PartnerRouteChildren = {
   PartnerProfileRoute: PartnerProfileRoute,
   PartnerRequestRoute: PartnerRequestRoute,
+  PartnerVenuesRoute: PartnerVenuesRoute,
 }
 
 const PartnerRouteWithChildren =
