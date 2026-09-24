@@ -23,6 +23,12 @@ interface Review {
 
 export function ReviewsSlider() {
   const [reviews, setReviews] = useState<Review[]>([]);
+
+  // L'auteur d'un avis peut avoir été supprimé : populate renvoie alors null.
+  const safeReviews = reviews.map((r) => ({
+    ...r,
+    user: r.user || { firstName: "Utilisateur", lastName: "supprimé" },
+  }));
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -56,6 +62,9 @@ export function ReviewsSlider() {
     };
   }, [reviews.length]);
 
+  // Garde-fou si la liste rétrécit sous l'index courant (rare, mais évite
+  // un rendu sur undefined).
+
   if (loading) {
     return (
       <div className="py-12 px-5">
@@ -71,9 +80,11 @@ export function ReviewsSlider() {
     );
   }
 
-  if (reviews.length === 0) return null;
+  if (safeReviews.length === 0) return null;
 
-  const review = reviews[currentIndex];
+  // L'index peut être périmé si la liste a rétréci entre deux rendus.
+  const review = safeReviews[currentIndex] ?? safeReviews[0]!;
+  if (!review) return null;
 
   return (
     <div className="py-12 px-5 bg-black/30">
@@ -139,9 +150,9 @@ export function ReviewsSlider() {
         </div>
 
         {/* Dots indicator */}
-        {reviews.length > 1 && (
+        {safeReviews.length > 1 && (
           <div className="flex justify-center gap-2 mt-6">
-            {reviews.map((_, i) => (
+            {safeReviews.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setCurrentIndex(i)}

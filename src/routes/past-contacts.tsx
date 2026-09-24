@@ -48,7 +48,14 @@ function PastContactsPage() {
     });
   };
 
-  const filtered = contacts.filter((c) =>
+  // Un contact peut référencer un utilisateur supprimé/désactivé : on
+  // affiche un libellé neutre au lieu de crasher sur user.firstName.
+  const withUser = contacts.map((c) => ({
+    ...c,
+    user: c.user || { _id: "", firstName: "Utilisateur", lastName: "supprimé", role: "" },
+  }));
+
+  const filtered = withUser.filter((c) =>
     `${c.user.firstName} ${c.user.lastName}`.toLowerCase().includes(searchQuery.toLowerCase())
   );
 

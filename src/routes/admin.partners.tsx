@@ -223,7 +223,7 @@ function AdminPartners() {
                         </div>
                         {a.submittedBy && (
                           <p className="text-xs text-muted-foreground mt-2">
-                            Proposé par {a.submittedBy.firstName} {a.submittedBy.lastName}
+                            Proposé par {a.submittedBy?.firstName || "Utilisateur"} {a.submittedBy?.lastName || ""}
                           </p>
                         )}
                       </div>
@@ -298,7 +298,7 @@ function AdminPartners() {
                       <div className="grid grid-cols-2 gap-4 text-sm mt-4">
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <User className="h-4 w-4" />
-                          {request.partnerId.firstName} {request.partnerId.lastName}
+                          {request.partnerId?.firstName || "Partenaire"} {request.partnerId?.lastName || ""}
                         </div>
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <MapPin className="h-4 w-4" />
@@ -496,7 +496,7 @@ function AdminPartners() {
               <h2 className="text-xl font-semibold mb-4">Approuver la demande</h2>
               <p className="text-sm text-muted-foreground mb-4">
                 Lieu : <strong>{selectedRequest.name}</strong><br />
-                Partenaire : {selectedRequest.partnerId.firstName} {selectedRequest.partnerId.lastName}
+                Partenaire : {selectedRequest.partnerId?.firstName || "Partenaire"} {selectedRequest.partnerId?.lastName || ""}
               </p>
               <div className="mb-6">
                 <label className="block text-sm font-semibold mb-2">Tarif de publication (FCFA)</label>

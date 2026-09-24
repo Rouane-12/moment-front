@@ -214,7 +214,16 @@ function GamesPage() {
     try {
       setLoading(true);
       const res = await api.chat.getPastContacts();
-      if (res.success) setContacts((res as any).contacts || []);
+      if (res.success) {
+        // Un contact peut référencer un utilisateur supprimé/désactivé :
+        // on affiche un libellé neutre au lieu de crasher sur user.firstName.
+        setContacts(
+          ((res as any).contacts || []).map((c: PastContact) => ({
+            ...c,
+            user: c.user || { _id: "", firstName: "Utilisateur", lastName: "supprimé", role: "" },
+          })),
+        );
+      }
     } catch (e) {
       console.error("Erreur chargement contacts:", e);
     } finally {

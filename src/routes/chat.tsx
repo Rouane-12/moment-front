@@ -222,7 +222,22 @@ function ChatPage() {
   const loadConversations = useCallback(async () => {
     try {
       const res = await api.chat.getConversations();
-      if (res.success) setConversations((res as any).conversations || []);
+      if (res.success) {
+        // Le backend peut renvoyer otherUser: undefined quand l'autre
+        // utilisateur a été supprimé/désactivé — on affiche un libellé neutre
+        // au lieu de crasher sur otherUser.firstName.
+        setConversations(
+          ((res as any).conversations || []).map((c: Conversation) => ({
+            ...c,
+            otherUser: c.otherUser || {
+              _id: (c.conversationId || "").split("_").find((part) => part && part !== user?.id) || "",
+              firstName: "Utilisateur",
+              lastName: "supprimé",
+              role: "",
+            },
+          })),
+        );
+      }
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, []);
@@ -1040,7 +1055,10 @@ function ChatPage() {
           ) : (
             <>
               {messages.map((msg) => {
-                const isMe = msg.sender._id === user?.id;
+                // Un sender populate peut être null si l'utilisateur a été
+                // supprimé après l'envoi du message.
+                const senderId = msg.sender?._id ?? "";
+                const isMe = senderId === user?.id;
                 return (
                   <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                     <div className="max-w-[70%] sm:max-w-[50%] md:max-w-[40%] flex flex-col">

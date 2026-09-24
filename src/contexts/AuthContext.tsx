@@ -33,6 +33,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     checkAuth();
+
+    // Une réponse 401 (token purgé par api.ts) force la déconnexion locale :
+    // sans ça, l'app continue de rendre avec un user inexistant.
+    const onUnauthorized = () => setUser(null);
+    window.addEventListener('auth:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', onUnauthorized);
   }, []);
 
   const checkAuth = async () => {
@@ -71,7 +77,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await api.auth.logout();
+    try {
+      await api.auth.logout();
+    } catch {
+      // Session déjà invalidée côté backend (401…) : on nettoie quand même
+      // le token et l'état local, sinon la déconnexion ne se fait jamais.
+    }
     localStorage.removeItem('token');
     setUser(null);
   };

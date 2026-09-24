@@ -234,7 +234,7 @@ function AdminReports() {
                           </span>
                         </div>
                         <p className="font-medium mb-1">
-                          {report.user.firstName} {report.user.lastName} ({report.user.email})
+                          {report.user?.firstName || "Utilisateur"} {report.user?.lastName || ""} ({report.user?.email || "email inconnu"})
                         </p>
                         {report.venue && (
                           <p className="text-sm text-muted-foreground mb-1">
@@ -252,7 +252,7 @@ function AdminReports() {
                         </p>
                         {report.resolvedAt && (
                           <p className="text-xs text-muted-foreground">
-                            Résolu le {new Date(report.resolvedAt).toLocaleDateString('fr-FR')} par {report.resolvedBy?.firstName} {report.resolvedBy?.lastName}
+                            Résolu le {new Date(report.resolvedAt).toLocaleDateString('fr-FR')} par {report.resolvedBy?.firstName || "Utilisateur"} {report.resolvedBy?.lastName || ""}
                           </p>
                         )}
                       </div>

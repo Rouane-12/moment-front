@@ -377,13 +377,13 @@ function VenueDetail() {
                         <div className="flex items-start gap-4">
                           <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
                             <span className="text-primary font-semibold text-sm">
-                              {review.user.firstName[0]}{review.user.lastName[0]}
+                              {review.user?.firstName?.[0] || "?"}{review.user?.lastName?.[0] || "?"}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-2 flex-wrap">
                               <span className="font-semibold">
-                                {review.user.firstName} {review.user.lastName}
+                                {review.user?.firstName || "Utilisateur"} {review.user?.lastName || ""}
                               </span>
                               <div className="flex gap-1">
                                 {[...Array(5)].map((_, i) => (
@@ -407,7 +407,7 @@ function VenueDetail() {
                             {review.reply && (
                               <div className="bg-primary/10 rounded-lg p-3 mt-3">
                                 <p className="text-xs font-semibold text-primary mb-1">
-                                  Réponse de {review.reply.repliedBy.firstName} {review.reply.repliedBy.lastName}
+                                  Réponse de {review.reply.repliedBy?.firstName || "Utilisateur"} {review.reply.repliedBy?.lastName || ""}
                                 </p>
                                 <p className="text-sm">{review.reply.text}</p>
                               </div>

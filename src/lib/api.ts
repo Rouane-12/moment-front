@@ -32,6 +32,14 @@ async function request<T>(
     const data = await response.json();
 
     if (!response.ok) {
+      // 401 = token absent/invalide/expiré (ex: utilisateur supprimé ou
+      // désactivé côté backend). On purge le token local et on prévient
+      // l'AuthContext, sinon l'app boucle sur des requêtes 401 et rend avec
+      // un user fantôme (crash "Cannot read properties of undefined").
+      if (response.status === 401 && localStorage.getItem('token')) {
+        localStorage.removeItem('token');
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      }
       throw new Error(data.message || 'Request failed');
     }
 
