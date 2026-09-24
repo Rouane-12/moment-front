@@ -16,6 +16,8 @@ type UserReview = {
 };
 
 export const Route = createFileRoute("/my-reviews")({
+  // Page authentifiée : SSR inutile et source de mismatchs d'hydratation.
+  ssr: false,
   component: MyReviews,
 });
 

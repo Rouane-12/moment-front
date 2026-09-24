@@ -5,6 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 
 export const Route = createFileRoute("/admin/profile")({
+  // Page authentifiée : SSR inutile et source de mismatchs d'hydratation.
+  ssr: false,
   component: AdminProfile,
 });
 

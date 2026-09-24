@@ -8,6 +8,8 @@ import * as LucideIcons from "lucide-react";
 const { Building2, TrendingUp, Star, Plus, Clock, CheckCircle, XCircle, CreditCard, MapPin, Users, BarChart3, Coins } = LucideIcons;
 
 export const Route = createFileRoute("/partner")({
+  // Layout authentifié : SSR inutile et source de mismatchs d'hydratation.
+  ssr: false,
   component: PartnerLayout,
 });
 

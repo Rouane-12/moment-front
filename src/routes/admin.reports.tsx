@@ -28,6 +28,8 @@ type ReportStats = {
 };
 
 export const Route = createFileRoute("/admin/reports")({
+  // Page authentifiée : SSR inutile et source de mismatchs d'hydratation.
+  ssr: false,
   component: AdminReports,
 });
 

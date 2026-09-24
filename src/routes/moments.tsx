@@ -6,6 +6,9 @@ import { api } from "@/lib/api";
 import { Dice5, Dumbbell } from "lucide-react";
 
 export const Route = createFileRoute("/moments")({
+  // Page authentifiée : SSR inutile et source de mismatchs d'hydratation
+  // (React #418/#423) — le serveur n'a pas l'état d'auth du navigateur.
+  ssr: false,
   head: () => ({
     meta: [
       { title: "Mes moments — MOMENT" },

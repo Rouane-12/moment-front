@@ -16,6 +16,9 @@ function getIcon(name: string) {
 }
 
 export const Route = createFileRoute("/venue/$id")({
+  // Entièrement derrière ProtectedRoute : SSR inutile et source de
+  // mismatchs d'hydratation.
+  ssr: false,
   component: VenueDetail,
 });
 

@@ -14,6 +14,8 @@ const {
 } = LucideIcons;
 
 export const Route = createFileRoute("/activities")({
+  // Page authentifiée : SSR inutile et source de mismatchs d'hydratation.
+  ssr: false,
   head: () => ({
     meta: [
       { title: "Activités — MOMENT" },

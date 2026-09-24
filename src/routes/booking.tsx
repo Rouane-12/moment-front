@@ -11,6 +11,8 @@ type Search = {
 };
 
 export const Route = createFileRoute("/booking")({
+  // Page authentifiée : SSR inutile et source de mismatchs d'hydratation.
+  ssr: false,
   validateSearch: (search: Record<string, unknown>): Search => ({
     id: (search["id"] as string) ?? "MOM-00000",
     title: (search["title"] as string) ?? "Ton moment",

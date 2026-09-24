@@ -4,6 +4,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 
 export const Route = createFileRoute("/partner/profile")({
+  // Page authentifiée : SSR inutile et source de mismatchs d'hydratation.
+  ssr: false,
   component: PartnerProfile,
 });
 
