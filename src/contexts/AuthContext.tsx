@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { api } from '@/lib/api';
+import { api, AuthError } from '@/lib/api';
 
 interface User {
   id: string;
@@ -48,7 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(response['user']);
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
+      // 401 au premier chargement = simple visiteur non connecté : c'est un
+      // état normal, pas une erreur à afficher dans la console.
+      if (!(error instanceof AuthError)) {
+        console.error('Auth check failed:', error);
+      }
     } finally {
       setLoading(false);
     }
@@ -119,7 +123,7 @@ export function useAuth() {
         isAuthenticated: false,
         isAdmin: false,
         isPartner: false,
-      };
+      } as AuthContextType;
     }
     throw new Error('useAuth must be used within an AuthProvider');
   }

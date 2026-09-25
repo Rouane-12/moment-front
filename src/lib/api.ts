@@ -7,6 +7,10 @@ export interface ApiResponse<T = any> {
   [key: string]: any;
 }
 
+// Erreur d'authentification attendue (ex: 401 d'un visiteur non connecté).
+// Sert uniquement à filtrer le logging : un 401 est un état normal, pas un bug.
+export class AuthError extends Error {}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -15,7 +19,6 @@ async function request<T>(
   
   // Get token from localStorage for cross-domain requests
   const token = localStorage.getItem('token');
-  console.log('API Request:', endpoint, 'Token exists:', !!token);
   
   const config: RequestInit = {
     ...options,
@@ -40,12 +43,20 @@ async function request<T>(
         localStorage.removeItem('token');
         window.dispatchEvent(new CustomEvent('auth:unauthorized'));
       }
-      throw new Error(data.message || 'Request failed');
+      // Un 401 est un état normal (visiteur non connecté, session expirée) :
+      // on le remonte comme AuthError pour ne pas polluer la console.
+      if (response.status === 401) {
+        throw new AuthError(data.message || 'Authentication required');
+      }
+      throw new Error(data.message || `HTTP ${response.status} — ${endpoint}`);
     }
 
     return data;
   } catch (error) {
-    console.error('API Error:', error);
+    // Les 401 (visiteur non connecté) sont normaux : ne pas les loguer en erreur.
+    if (!(error instanceof AuthError)) {
+      console.error('API Error:', error);
+    }
     throw error;
   }
 }
